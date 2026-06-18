@@ -287,11 +287,11 @@ const CASES = {
       l_k:{text:"K 8.5 mEq/L（著明高値）。",s:8,time:120,reveal:["K"],flag:["hyperk_known"],tag:"critical",miss:-16},
       l_gas:{text:"pH 7.18、HCO₃⁻ 12、BE −13、K 8.5。代謝性アシドーシス。",s:5,time:120,reveal:["K"],flag:["hyperk_known"]},
       l_chem:{text:"BUN 86、Cre 6.8、Glu 146。高窒素血症。",s:4,time:120,flag:["azotemia"],tag:"good"},
-      l_glu:{text:"血糖 146 mg/dL。低血糖なし。",s:1,time:120},
+      l_glu:{text:"血糖 146 mg/dL。低血糖なし。",s:1,time:120,norm:true},
       l_pcvtp:{text:"PCV 45% / TP 7.8。脱水傾向。",s:2,time:120},
       l_us:{text:"膀胱は著明に拡張・緊満、尿道内に高エコー栓子。腎軽度腫大。",s:4,time:180,flag:["bladder_known"],tag:"good"},
       l_abd:{text:"膀胱の著明な拡大。明らかなX線不透過性結石は指摘できず。",s:2,time:180,flag:["bladder_known"]},
-      ex_effort:{text:"呼吸様式に明らかな異常なし。",s:0,time:60},
+      ex_effort:{text:"呼吸様式に明らかな異常なし。",s:0,time:60,norm:true},
       d_calcium:{text:"グルコン酸カルシウムを緩徐投与。心電図のT波増高とQRS幅がやや改善。",s:10,time:60,fx:S=>{S.caT=15*60;},flag:["ca_protect"],tag:"critical",miss:-16,need:[{f:["hyperk_known"],pen:-4,msg:"高K血症の根拠を確認する前に投与した。"}]},
       d_dexins:{text:"ブドウ糖＋速効型インスリンを投与。Kが一時的に低下。以後の血糖モニタが必要。",s:8,time:60,flag:["k_shift","glu_monitor"],tag:"good",need:[{f:["hyperk_known"],pen:-6,msg:"K測定前にインスリン治療を行った。"}]},
       d_insulin:{text:"速効型インスリンを投与した。",s:-4,time:60,flag:["k_shift"],need:[{f:["glu_paired"],pen:-4,msg:"ブドウ糖併用・血糖モニタなしでは低血糖リスク。"}]},
@@ -342,7 +342,7 @@ const CASES = {
       ex_mm:{text:"粘膜蒼白、CRT 3秒。",s:3,time:60,tag:"good"},
       ex_pulse:{text:"末梢動脈は速く弱い。",s:3,time:60,tag:"good"},
       ex_general:{text:"不穏、起立を繰り返す、流涎。",s:1,time:60},
-      ex_temp:{text:"直腸温 38.2℃。",s:0,time:60,reveal:["temp"]},
+      ex_temp:{text:"直腸温 38.2℃。",s:0,time:60,reveal:["temp"],norm:true},
       monitor:{text:"モニターを装着。頻脈。",s:3,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
       o2:{text:"酸素投与を開始。",s:2,time:30},
       ivc:{text:"太い静脈路を確保した（できれば両前肢）。",s:5,time:60,flag:["iv"],tag:"critical",miss:-12},
@@ -382,13 +382,13 @@ const CASES = {
     res:{
       hx_cc:{text:"昨夜から呼吸が速く、今朝は口を開けて苦しそう。伏せたまま動かない。",s:2,time:30},
       hx_resp:{text:"昨夜から呼吸が速く、今朝は開口呼吸。運動を嫌がる。",s:4,time:30,tag:"good"},
-      monitor:{text:"モニターを装着（ストレスに注意）。",s:2,time:30,reveal:["HR","SpO2","RR"]},
+      monitor:{text:"モニターを装着（ストレスに注意）。",s:2,time:30,reveal:["HR","SBP","SpO2","RR"]},
       o2:{text:"酸素室で酸素化。安静が保て、努力性呼吸がやや軽減。",s:8,time:30,tag:"critical",miss:-16},
       ex_thorax:{text:"心音・肺音が減弱、特に腹側で聴取しにくい。",s:4,time:60,tag:"good"},
       ex_effort:{text:"起座・開口呼吸、著明な努力性呼吸。",s:3,time:60,tag:"good"},
       ex_general:{text:"伏臥、動きたがらない。",s:1,time:60},
       ex_mm:{text:"可視粘膜やや チアノーゼ様。",s:2,time:60},
-      ex_temp:{text:"直腸温 38.0℃。",s:0,time:60,reveal:["temp"]},
+      ex_temp:{text:"直腸温 38.0℃。",s:0,time:60,reveal:["temp"],norm:true},
       l_fast:{text:"TFAST：両側胸腔に無エコー貯留。肺は虚脱。",s:8,time:90,reveal:["fast"],tag:"critical",miss:-12},
       l_echo:{text:"心エコーで左房拡大、心筋肥厚。胸水あり。",s:5,time:120,tag:"good"},
       l_thorax:{text:"撮影のため保定した。撮影中に呼吸状態が悪化した。",s:-6,time:120,tag:"harmful",verdict:"呼吸不安定な猫を保定してのX線はストレスで急変を招きうる。先に酸素と最小ハンドリングを。",fx:S=>{S.stress=(S.stress||0)+1;}},
@@ -424,11 +424,12 @@ function startCase(cid){
   S={cid,C,t:0,h:JSON.parse(JSON.stringify(C.hidden)),
      disp:{HR:NaN,SBP:NaN,SpO2:NaN,RR:NaN},
      flags:new Set(),cflags:new Set(),revealed:new Set(),
-     sel:new Set(),scored:new Set(),dx:new Set(),dispo:null,snap:{},
+     sel:new Set(),scored:new Set(),dx:new Set(),dispo:null,snap:{},results:[],
      caT:0,stress:0,arrest:false,dead:false,rosc:false,score:0,log:[]};
   arrestShown=false; reopen=null;
+  preApply('monitor'); preApply('ivc');   // モニター・静脈路は最初から装着済み
   document.getElementById('ccchip').textContent="主訴：「"+C.open+"」";
-  log("搬入。");
+  log("搬入。モニター装着・静脈路確保済み。");
   drawRoom(); setupMon(); render();
   if(timer)clearInterval(timer); timer=setInterval(tick,1000);
 }
@@ -459,6 +460,14 @@ function tryResus(){
 
 // ---------- アクション ----------
 function res(id){ return (S.C.res&&S.C.res[id])?S.C.res[id]:defaultResult(id); }
+function preApply(id){ // 初期装着（時間を消費せず実施済みにする）
+  const r=res(id); S.sel.add(id);S.flags.add(id);S.scored.add(id);
+  if(r.reveal)r.reveal.forEach(k=>S.revealed.add(k));
+  if(r.flag)r.flag.forEach(f=>S.cflags.add(f));
+  if(typeof r.s==="number")S.score+=r.s;
+  for(const k of ["HR","SBP","SpO2","RR"]) if(S.revealed.has(k))S.disp[k]=S.h[k];
+  S.snap[id]={t:0,HR:Math.round(S.h.HR),SBP:Math.round(S.h.SBP),SpO2:Math.round(S.h.SpO2),temp:S.h.temp};
+}
 function doAction(id){
   if(S.dead)return;
   const C=S.C, isLab=actionType(id)==="lab", first=!S.scored.has(id);
@@ -478,7 +487,11 @@ function doAction(id){
   if(isLab&&C.recheckBonus&&C.recheckBonus[id]&&S.flags.has("p_ucath")&&!S.cflags.has("rk_"+id)){
     S.cflags.add("rk_"+id); S.score+=C.recheckBonus[id]; logWarn("閉塞解除後の再評価。");
   }
-  log(`${labelOf(id)}：${r.text}${(!first&&isLab)?'（再評価）':''}`);
+  const rtext=`${r.text}${(!first&&isLab)?'（再評価）':''}`;
+  const _ty=actionType(id);
+  const abn=['hx','exam','lab'].includes(_ty)&&S.C.res&&S.C.res[id]&&!S.C.res[id].norm;
+  S.results.unshift({id,t:S.t,text:rtext,type:_ty,abn});
+  log(`${labelOf(id)}：${rtext}`);
   if(id==="monitor"){ for(const k of ["HR","SBP","SpO2","RR"]) if(S.revealed.has(k))S.disp[k]=S.h[k]; }
   render(); if(reopen)reopen();
 }
@@ -571,6 +584,12 @@ function render(){
 // ---------- カテゴリ・シート ----------
 const OG=new Set(); // 開いているグループを記憶
 function onGroupToggle(elem){ const g=elem.getAttribute('data-g'); if(elem.open)OG.add(g); else OG.delete(g); }
+function resultsHTML(types){ // モーダル内にその場で結果を表示（新しい順）
+  const list=S.results.filter(r=>types.includes(r.type));
+  if(!list.length)return '';
+  return `<div class="card" style="margin:12px 0 4px"><div class="sub" style="margin-bottom:4px">📋 結果（新しい順）</div><div class="log">`+
+    list.map(r=>`<div class="e"><span class="ts">${fmt(r.t)}</span><b>${labelOf(r.id)}</b>：<span style="${r.abn?'color:var(--red);font-weight:700':''}">${r.text}</span></div>`).join('')+`</div></div>`;
+}
 function catByKey(k){ return CATALOG.find(c=>c.key===k); }
 function openCat(key){
   reopen=()=>{ if(document.getElementById('ov').classList.contains('show'))renderCat(key); };
@@ -599,6 +618,7 @@ function renderCat(key){
     for(const it of items)h+=itemBtn(it.id,it.label);
     if(!items.length)h+='<div class="tiny" style="padding:8px">該当なし</div>';
   }
+  h+=resultsHTML([{lab:'lab',drug:'drug',proc:'proc',stab:'stab'}[key]]);
   openSheet(h);
   if(c.search){ const el=document.getElementById('catsearch'); if(el){ el.focus(); el.setSelectionRange(el.value.length,el.value.length);} }
 }
@@ -629,6 +649,7 @@ function renderPatient(){
         h+=`<button class="chip ${done?'done':''}" onclick="doAction('${it[0]}')">${done?'✓ ':''}${it[1]}</button>`; }
       h+=`</div></details>`;
     }
+    h+=resultsHTML(['exam']);
   }
   openSheet(h);
   const ch=document.getElementById('chat'); if(ch)ch.scrollTop=ch.scrollHeight;
@@ -636,7 +657,8 @@ function renderPatient(){
 function renderChat(){
   const asked=[...S.sel].filter(id=>id.startsWith("hx_"));
   if(!asked.length)return '<div class="tiny">まだ質問していません。</div>';
-  return asked.map(id=>`<div class="bub q">${labelOf(id)}</div><div class="bub a">${res(id).text}</div>`).join('');
+  return asked.map(id=>{ const abn=S.C.res&&S.C.res[id]&&!S.C.res[id].norm;
+    return `<div class="bub q">${labelOf(id)}</div><div class="bub a" style="${abn?'color:#ff9aa6':''}">${res(id).text}</div>`; }).join('');
 }
 function askFree(){
   const inp=document.getElementById('hxin'); const t=(inp.value||'').trim(); if(!t)return;

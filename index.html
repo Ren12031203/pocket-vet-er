@@ -382,9 +382,9 @@ const CASES = {
       warm:{text:"保温を開始。低体温傾向に対応。",s:3,time:30,reveal:["temp"],tag:"good"},
       ex_temp:{text:"直腸温 36.5℃（低体温）。",s:1,time:60,reveal:["temp"]},
       l_ecg:{text:"P波平低化〜消失、テント状T波、QRS幅延長、徐脈。高K血症を強く示唆。（数値Kは電解質検査で確認）",s:8,time:120,reveal:["ecg"],flag:["hyperk_known"],tag:"critical",miss:-16},
-      l_lyte:{text:"Na 148、K 8.5、Cl 112、iCa 1.05。Kが著明高値。",s:8,time:120,reveal:["K"],flag:["hyperk_known"],tag:"critical",miss:-16},
-      l_k:{text:"K 8.5 mEq/L（著明高値）。",s:8,time:120,reveal:["K"],flag:["hyperk_known"],tag:"critical",miss:-16},
-      l_gas:{text:"pH 7.18、HCO₃⁻ 12、BE −13、K 8.5。代謝性アシドーシス。",s:5,time:120,reveal:["K"],flag:["hyperk_known"]},
+      l_lyte:{text:"Na 148、K 8.5、Cl 112、iCa 1.05。Kが著明高値。",s:8,time:120,reveal:["K"],flag:["hyperk_known"],tag:"critical",critGroup:"k_measure",critLabel:"血清Kを測定（電解質/K/血ガスのいずれか）",miss:-16},
+      l_k:{text:"K 8.5 mEq/L（著明高値）。",s:8,time:120,reveal:["K"],flag:["hyperk_known"],tag:"critical",critGroup:"k_measure",critLabel:"血清Kを測定（電解質/K/血ガスのいずれか）",miss:-16},
+      l_gas:{text:"pH 7.18、HCO₃⁻ 12、BE −13、K 8.5。代謝性アシドーシス。",s:5,time:120,reveal:["K"],flag:["hyperk_known"],tag:"critical",critGroup:"k_measure",critLabel:"血清Kを測定（電解質/K/血ガスのいずれか）",miss:-16},
       l_chem:{text:"BUN 86、Cre 6.8、Glu 146。高窒素血症。",s:4,time:120,flag:["azotemia"],tag:"good"},
       l_glu:{text:"血糖 146 mg/dL。低血糖なし。",s:1,time:120,norm:true},
       l_pcvtp:{text:"PCV 45% / TP 7.8。脱水傾向。",s:2,time:120},
@@ -868,10 +868,19 @@ function showResult(){
   document.getElementById('sim').classList.add('hide'); closeSheet();
   const C=S.C; let score=S.score;
   const crit=[],good=[],harm=[],unnec=[];
-  for(const id in (C.res||{})){ const r=C.res[id],done=S.sel.has(id);
-    if(r.tag==="critical"){ if(done)crit.push({id,ok:true}); else{ crit.push({id,ok:false}); if(typeof r.miss==="number")score+=r.miss; } }
-    else if(r.tag==="good"&&done)good.push(id);
-    else if(r.tag==="harmful"&&done)harm.push({id,v:r.verdict||r.text}); }
+  // 必須行為はグループ化（同じ情報を測る検査はどれか1つでOK＝二重減点/二重加点を防ぐ）
+  const cg={};
+  for(const id in (C.res||{})){ const r=C.res[id];
+    if(r.tag==="critical"){ const g=r.critGroup||id;
+      (cg[g]=cg[g]||{ids:[],label:r.critLabel||labelOf(id),miss:0}).ids.push(id);
+      if(typeof r.miss==="number")cg[g].miss=Math.min(cg[g].miss,r.miss); }
+    else if(r.tag==="good"&&S.sel.has(id))good.push(id);
+    else if(r.tag==="harmful"&&S.sel.has(id))harm.push({id,v:r.verdict||r.text}); }
+  for(const g in cg){ const G=cg[g], doneIds=G.ids.filter(i=>S.sel.has(i));
+    if(doneIds.length){ // 重複測定の二重加点を相殺（グループは1回ぶんの価値）
+      const sList=doneIds.map(i=>C.res[i].s||0); score-=(sList.reduce((a,b)=>a+b,0)-Math.max(...sList));
+      crit.push({id:doneIds[0],label:G.label,ok:true});
+    } else { score+=G.miss; crit.push({id:G.ids[0],label:G.label,ok:false}); } }
   for(const id of S.sel){ if(!(C.res&&C.res[id])){ const t=actionType(id); if(t==="lab"||t==="drug"||t==="proc")unnec.push(id);} }
   const dxPrimary=S.dx.has(C.primaryDx),dxHit=[...S.dx].some(d=>C.correctDx.includes(d));
   const dxWrong=[...S.dx].filter(d=>!C.correctDx.includes(d));
@@ -886,8 +895,8 @@ function showResult(){
   const grade=pct>=85?"S":pct>=70?"A":pct>=55?"B":pct>=40?"C":"D";
   const gcol=(grade==="S"||grade==="A")?"var(--green)":grade==="B"?"var(--amber)":"var(--red)";
 
-  let missHtml=crit.filter(c=>!c.ok).map(c=>`<div class="e"><span class="rchip bad">未実施</span>${labelOf(c.id)}</div>`).join('');
-  let critOk=crit.filter(c=>c.ok).map(c=>`<div class="e"><span class="rchip ok">○ 適切</span>${labelOf(c.id)} ${snapStr(c.id)}</div>`).join('');
+  let missHtml=crit.filter(c=>!c.ok).map(c=>`<div class="e"><span class="rchip bad">未実施</span>${c.label}</div>`).join('');
+  let critOk=crit.filter(c=>c.ok).map(c=>`<div class="e"><span class="rchip ok">○ 適切</span>${c.label} ${snapStr(c.id)}</div>`).join('');
   let goodHtml=good.map(id=>`<div class="e"><span class="rchip ok">＋</span>${labelOf(id)} ${snapStr(id)}</div>`).join('');
   let harmHtml=harm.map(h=>`<div class="e"><span class="rchip bad">禁忌/不適切</span>${labelOf(h.id)} ${snapStr(h.id)}<div class="tiny">${h.v}</div></div>`).join('');
   let unnecHtml=unnec.map(id=>`<div class="e"><span class="rchip neu">−</span>${labelOf(id)}（診断価値が低い） ${snapStr(id)}</div>`).join('')

@@ -290,6 +290,30 @@ function imagingFor(id){
   return {text:"該当領域に明らかな異常を認めない。",s:0,abn:false};
 }
 
+/* ---------- 検査の時系列化（LabTimeline）：現在のhidden値から生成し前回値と比較 ---------- */
+const LAB_NORM={ K:[3.5,5.5,"mEq/L"], Na:[145,155,"mEq/L"], Cl:[105,120,"mEq/L"], iCa:[1.2,1.5,"mmol/L"],
+  BUN:[16,36,"mg/dL"], Cre:[0.8,2.4,"mg/dL"], Glu:[70,150,"mg/dL"], lactate:[0,2.5,"mmol/L"],
+  pH:[7.35,7.45,""], HCO3:[18,26,"mEq/L"], PCV:[30,45,"%"], TP:[6,8,"g/dL"] };
+const LAB_DEF={ l_k:["K"], l_lyte:["Na","K","Cl","iCa"], l_gas:["pH","HCO3","K","lactate"],
+  l_chem:["BUN","Cre","Glu"], l_lactate:["lactate"], l_glu:["Glu"], l_pcvtp:["PCV","TP"] };
+function flagOf(a,v){ const n=LAB_NORM[a]; if(!n)return''; if(v>n[1])return'hi'; if(v<n[0])return'lo'; return''; }
+function fmtVal(a,v){ return a==="pH"?v.toFixed(2):(a==="K"||a==="iCa"||a==="lactate")?v.toFixed(1):Math.round(v); }
+function labText(id){
+  const keys=LAB_DEF[id]; if(!keys)return null;
+  const parts=keys.map(a=>{ const v=S.h[a]; if(v==null)return null;
+    const n=LAB_NORM[a]; const fl=flagOf(a,v); const arrow=fl==="hi"?"↑":fl==="lo"?"↓":"";
+    const prev=S.labPrev[a]; let trend="";
+    if(prev!=null){ const d=a==="pH"?0.02:(a==="K"||a==="lactate"||a==="iCa")?0.2:3;
+      if(Math.abs(prev-v)>=d){ const mid=(n[0]+n[1])/2; const toward=Math.abs(v-mid)<Math.abs(prev-mid);
+        trend=`（前回 ${fmtVal(a,prev)} → ${fmtVal(a,v)}・${toward?"正常方向":"悪化方向"}）`; } }
+    return `${a} ${fmtVal(a,v)}${arrow}${trend}`;
+  }).filter(Boolean);
+  keys.forEach(a=>{ if(S.h[a]!=null){ S.labTimeline.push({a,v:S.h[a],t:S.t,id}); S.labPrev[a]=S.h[a]; } });
+  // 異常の有無で赤字判定用フラグ
+  const anyAbn=keys.some(a=>S.h[a]!=null&&flagOf(a,S.h[a]));
+  return {text:parts.join("、")+"。", abn:anyAbn};
+}
+
 /* ---------- グローバルCPAトリガーエンジン ---------- */
 const REVERSIBLE_CAUSES=["hyperkalemia","iatrogenic_hyperkalemia","oxygenation_failure","ventilation_failure","drug_induced","sedation_related_cpa","anesthesia_related_cpa","obstructive_shock","shock_lactic_acidosis"];
 function causeLabel(c){return {hyperkalemia:"高カリウム血症",iatrogenic_hyperkalemia:"医原性高K血症",oxygenation_failure:"低酸素",ventilation_failure:"換気不全/呼吸停止",drug_induced:"薬剤性呼吸抑制(オピオイド)",sedation_related_cpa:"鎮静関連(α2)",anesthesia_related_cpa:"麻酔関連",obstructive_shock:"閉塞性ショック",shock_lactic_acidosis:"ショック/高乳酸",circulatory_collapse:"循環虚脱",malignant_arrhythmia:"致死性不整脈",unknown:"原因不明"}[c]||c;}
@@ -318,8 +342,10 @@ const CASES = {
     signalment:"猫 3歳 去勢雄 雑種 5.2kg",
     open:"昨日から何度もトイレに行くが尿が出ていない。今朝からぐったりして、下腹部を痛がる。",
     hidden:{HR:96,SBP:88,SpO2:96,RR:40,temp:36.5,K:8.5},
+    labs0:{Na:148,Cl:112,iCa:1.05,BUN:86,Cre:6.8,Glu:118,pH:7.18,HCO3:12,PCV:45,TP:7.8,lactate:3.8},
     physiology(S){
       const relieved=S.flags.has("p_ucath"), decomp=S.flags.has("p_cysto");
+      if(relieved){ S.h.BUN=Math.max(40,S.h.BUN-0.4); S.h.Cre=Math.max(2.6,S.h.Cre-0.03); } // 閉塞解除後に腎数値が緩徐改善
       if(!relieved&&!decomp)S.h.K+=0.012;
       if(S.flags.has("d_insulin")||S.flags.has("d_dexins"))S.h.K-=0.05;
       if(S.flags.has("d_bicarb"))S.h.K-=0.02;
@@ -355,7 +381,7 @@ const CASES = {
       bigbolus:{text:"大量急速輸液を実施。猫では過剰輸液に注意。",s:1,time:30},
       warm:{text:"保温を開始。低体温傾向に対応。",s:3,time:30,reveal:["temp"],tag:"good"},
       ex_temp:{text:"直腸温 36.5℃（低体温）。",s:1,time:60,reveal:["temp"]},
-      l_ecg:{text:"P波平低化〜消失、テント状T波、QRS幅延長、徐脈。",s:8,time:120,reveal:["ecg","K"],flag:["hyperk_known"],tag:"critical",miss:-16},
+      l_ecg:{text:"P波平低化〜消失、テント状T波、QRS幅延長、徐脈。高K血症を強く示唆。（数値Kは電解質検査で確認）",s:8,time:120,reveal:["ecg"],flag:["hyperk_known"],tag:"critical",miss:-16},
       l_lyte:{text:"Na 148、K 8.5、Cl 112、iCa 1.05。Kが著明高値。",s:8,time:120,reveal:["K"],flag:["hyperk_known"],tag:"critical",miss:-16},
       l_k:{text:"K 8.5 mEq/L（著明高値）。",s:8,time:120,reveal:["K"],flag:["hyperk_known"],tag:"critical",miss:-16},
       l_gas:{text:"pH 7.18、HCO₃⁻ 12、BE −13、K 8.5。代謝性アシドーシス。",s:5,time:120,reveal:["K"],flag:["hyperk_known"]},
@@ -388,6 +414,7 @@ const CASES = {
     signalment:"犬 6歳 去勢雄 グレートデン 48kg",
     open:"夕食後に落ち着かず、腹がパンパンに膨れてきた。吐こうとするが何も出ない。",
     hidden:{HR:160,SBP:78,SpO2:95,RR:48,temp:38.2,lactate:6.5},
+    labs0:{K:4.2,Na:146,Cl:110,iCa:1.25,BUN:30,Cre:1.4,Glu:120,pH:7.28,HCO3:16,PCV:55,TP:7.8},
     physiology(S){
       const decomp=S.flags.has("p_ogtube")||S.flags.has("p_gastrocen");
       const resus=S.flags.has("bolus")||S.flags.has("bigbolus")||S.flags.has("fluids");
@@ -422,6 +449,7 @@ const CASES = {
       d_lidocaine:{text:"心室性不整脈に対しリドカインを投与した。",s:2,time:60},
       l_abd:{text:"右側臥位像で胃の著明な拡張と区画化（ダブルバブル様）。捻転を示唆。",s:8,time:120,reveal:["xray"],tag:"critical",miss:-14},
       l_gas:{text:"代謝性アシドーシス、Lactate 6.5（上昇）。",s:4,time:120,reveal:["lactate"],tag:"good"},
+      l_lactate:{s:4,time:60,reveal:["lactate"],tag:"good"},
       l_pcvtp:{text:"PCV 55 / TP 7.8（血液濃縮）。",s:2,time:120},
       l_ecg:{text:"散発する心室性期外収縮（VPC）。",s:2,time:120},
       p_gastrocen:{text:"経皮で胃を穿刺・減圧。ガスが抜け腹圧が低下。",s:6,time:120,flag:["decomp"],tag:"good"},
@@ -438,6 +466,7 @@ const CASES = {
     signalment:"猫 9歳 避妊雌 雑種 4.0kg",
     open:"昨夜から呼吸が速く、今朝は口を開けて苦しそう。動きたがらず、伏せたまま。",
     hidden:{HR:200,SBP:120,SpO2:86,RR:70,temp:38.0},
+    labs0:{K:4.0,Na:150,Cl:115,iCa:1.3,BUN:28,Cre:1.6,Glu:130,pH:7.34,HCO3:20,PCV:38,TP:7.0,lactate:2.0},
     physiology(S){
       const stress=S.stress||0; const tapped=S.flags.has("p_thoraco")||S.flags.has("p_chesttube");
       S.h.SpO2+=(((tapped?97:(S.flags.has("o2")?(92-stress*4):(86-stress*5))))-S.h.SpO2)*0.3;
@@ -490,10 +519,11 @@ function startCase(cid){
   document.getElementById('start').classList.add('hide');
   document.getElementById('result').classList.add('hide');
   document.getElementById('sim').classList.remove('hide');
-  S={cid,C,t:0,h:JSON.parse(JSON.stringify(C.hidden)),
+  S={cid,C,t:0,h:Object.assign(JSON.parse(JSON.stringify(C.hidden)),JSON.parse(JSON.stringify(C.labs0||{}))),
      disp:{HR:NaN,SBP:NaN,SpO2:NaN,RR:NaN},
      flags:new Set(),cflags:new Set(),revealed:new Set(),
      sel:new Set(),scored:new Set(),dx:new Set(),dispo:null,snap:{},results:[],
+     labTimeline:[],labPrev:{},
      dz:new Set(C.dz||[]),adverseEvents:[],cpaCtx:null,
      caT:0,stress:0,arrest:false,dead:false,rosc:false,cpr:null,score:0,log:[]};
   arrestShown=false; reopen=null;
@@ -511,6 +541,18 @@ function tick(){
   evaluateCPA();
   if(S.arrest&&!S.rosc&&!S.dead&&!S.cpr)enterCPR();
   render();
+}
+// 行為の所要時間ぶん病態を進める（CT 600秒・X線保定120秒・手術等の時間経過を病態に反映）
+function advanceTime(seconds){
+  let rem=seconds||0;
+  while(rem>0 && !S.dead && !S.cpr && !S.rosc){
+    const dt=Math.min(STEP,rem); S.t+=dt; if(S.caT>0)S.caT-=dt;
+    S.C.physiology(S);
+    evaluateCPA();
+    if(S.arrest&&!S.rosc&&!S.cpr){ enterCPR(); return; }
+    rem-=dt;
+  }
+  if(S.flags.has("monitor")){ for(const k of ["HR","SBP","SpO2","RR"]) if(S.revealed.has(k)) S.disp[k]=S.h[k]; }
 }
 // CPA発生時は必ず enterCPR() に統一（旧 onArrest()/tryResus() は廃止）
 
@@ -534,8 +576,9 @@ function doAction(id){
   if(S.dead)return;
   const C=S.C, isLab=actionType(id)==="lab", first=!S.scored.has(id);
   if(!first&&!isLab){ return; }
-  const r=resolveResult(id);
-  S.sel.add(id); S.flags.add(id); S.t+=(r.time||60);
+  const r0=resolveResult(id);
+  const r = LAB_DEF[id] ? Object.assign({},r0,labText(id)||{}) : r0; // 検査は現在のhidden値から生成（前回値比較）
+  S.sel.add(id); S.flags.add(id);
   if(r.reveal)r.reveal.forEach(k=>S.revealed.add(k));
   if(first){
     if(actionType(id)==="drug")drugRisk(id); // 全症例共通の薬剤リスク判定（生理影響を先に反映）
@@ -556,6 +599,8 @@ function doAction(id){
   S.results.unshift({id,t:S.t,text:rtext,type:_ty,abn});
   log(`${labelOf(id)}：${rtext}`);
   if(id==="monitor"){ for(const k of ["HR","SBP","SpO2","RR"]) if(S.revealed.has(k))S.disp[k]=S.h[k]; }
+  advanceTime(r.time||60); // 行為の所要時間ぶん病態を進める
+  if(S.cpr)return;         // CPRモードへ遷移したら通常UIは更新しない
   render(); if(reopen)reopen();
 }
 
@@ -778,7 +823,7 @@ function loopMon(){
   wf.raf=requestAnimationFrame(loopMon);
 }
 function ecgSample(p){
-  const K=(S&&S.revealed.has("K"))?S.h.K:5;
+  const K=(S&&(S.revealed.has("K")||S.cflags&&S.cflags.has("hyperk_known")))?S.h.K:5; // ECGで高K形態は出すが数値は伏せる
   const tAmp=clamp(0.18+(K-5.5)*0.16,0.12,0.9),pW=Math.max(0,(7-K)/3.5);
   let v=0;v+=pW*0.18*g(p,0.12,0.02);v+=-0.12*g(p,0.27,0.01);v+=1.0*g(p,0.30,0.008);v+=-0.22*g(p,0.33,0.012);
   v+=tAmp*g(p,0.55,clamp(0.06-(K-5.5)*0.006,0.022,0.06));return v;

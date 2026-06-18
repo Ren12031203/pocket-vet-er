@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>ポケット獣急外来（試作）</title>
+<style>
+  :root{ --bg:#0e1116; --panel:#161b22; --line:#263041; --ink:#e6edf3; --sub:#9fb0c3;
+    --accent:#3fb6ff; --green:#36d399; --red:#ff5d6c; --amber:#ffcf5c; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#05070a;color:var(--ink);overscroll-behavior:none;
+    -webkit-text-size-adjust:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;}
+  .phone{max-width:480px;margin:0 auto;min-height:100vh;min-height:100dvh;background:var(--bg);display:flex;flex-direction:column;position:relative;overflow:hidden}
+  @media(min-width:481px){ body{padding:0} .phone{box-shadow:0 0 0 1px #1b232e} }
+  .pill{display:inline-block;background:#13283c;color:var(--accent);border:1px solid #1f4361;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600}
+  h1{font-size:22px;margin:10px 0 4px}
+  p{line-height:1.55}
+  .pad{padding:16px}
+  .btn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:12px;padding:11px 14px;font-size:14px;font-weight:600;cursor:pointer;width:100%}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:linear-gradient(180deg,#1f6fb0,#155488);border-color:#1f6fb0}
+  .btn.ghost{background:transparent}
+  .sub{color:var(--sub);font-size:13px}.tiny{font-size:11px;color:var(--sub)}.hide{display:none}
+
+  /* ---------- monitor ---------- */
+  .monitor{background:#04130d;border-bottom:1px solid #10341f;padding:6px 8px}
+  .topbar{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#7ef0c4;font-family:ui-monospace,Menlo,monospace}
+  .monrow{display:flex;gap:6px;margin-top:4px}
+  .ecgwrap{flex:1;background:#03100a;border:1px solid #10341f;border-radius:8px}
+  canvas{display:block;width:100%;height:132px}
+  .nums{width:96px;display:flex;flex-direction:column;justify-content:space-between}
+  .num{line-height:1}
+  .num .l{font-size:9px;color:#5fae8a}
+  .num .v{font-size:26px;font-weight:800;font-family:ui-monospace,monospace}
+  .num .v small{font-size:13px}
+  .nHR .v{color:#37e08a}.nBP .v{color:#ff6d7a}.nSpO2 .v{color:#5fd0ff}.nRR .v{color:#ffd45c}
+
+  /* ---------- room ---------- */
+  .stage{flex:1;position:relative;overflow:hidden;background:linear-gradient(#0c1622,#0a1119)}
+  .ccchip{position:absolute;top:10px;left:10px;z-index:3;background:#0f2233;border:1px solid #1f4361;color:#cfe6ff;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600;max-width:80%}
+  svg.room{width:100%;height:100%;display:block}
+  .station{cursor:pointer}
+  .station .hit{fill:transparent}
+  .station:active .lab{opacity:.6}
+  .lab{font-size:12px;font-weight:700;fill:#dce8f5}
+  .badge{font-size:11px;font-weight:800;fill:#37e08a}
+  .statusbar{position:absolute;left:0;right:0;bottom:0;z-index:3;background:rgba(8,14,20,.86);border-top:1px solid var(--line);
+    display:flex;gap:10px;flex-wrap:wrap;padding:7px 10px;font-size:12px;color:#cfe0f0}
+  .statusbar b{color:#fff}
+
+  /* ---------- sheets ---------- */
+  .ov{position:absolute;inset:0;background:rgba(2,5,9,.72);display:none;align-items:flex-end;z-index:50}
+  .ov.show{display:flex}
+  .sheet{background:var(--bg);border-top-left-radius:18px;border-top-right-radius:18px;border:1px solid var(--line);width:100%;max-height:90%;overflow:auto;padding:14px}
+  .sheet h3{margin:2px 0 8px;display:flex;justify-content:space-between;align-items:center}
+  .x{background:#1c2533;border:1px solid var(--line);color:#cfe0f0;border-radius:999px;width:30px;height:30px;font-size:16px;cursor:pointer}
+  input[type=text]{width:100%;background:#0c1219;border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:10px;font-size:14px}
+  details.grp{border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:#10151c;overflow:hidden}
+  details.grp>summary{list-style:none;cursor:pointer;padding:10px 12px;font-weight:700;font-size:13.5px;display:flex;justify-content:space-between;align-items:center}
+  details.grp>summary::-webkit-details-marker{display:none}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px 12px}
+  .chip{background:#0c1219;border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:7px 11px;font-size:13px;cursor:pointer}
+  .chip.done{background:#0f2e22;border-color:#1d6b50;color:#8af0c6}
+  .item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:#0c1219;border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:9px 11px;margin-bottom:6px;font-size:13.5px;cursor:pointer}
+  .item .tick{width:16px;flex:0 0 16px;color:var(--sub);font-weight:800}.item.sel{border-color:#2c5a78}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tab{flex:1;text-align:center;padding:9px;border-radius:10px;border:1px solid var(--line);background:#0c1219;font-weight:700;font-size:13.5px;cursor:pointer}
+  .tab.on{background:linear-gradient(180deg,#1f6fb0,#155488);border-color:#1f6fb0}
+  .chat{background:#0a1019;border:1px solid var(--line);border-radius:12px;padding:10px;min-height:90px;max-height:230px;overflow:auto;margin-bottom:8px}
+  .bub{max-width:84%;padding:7px 11px;border-radius:12px;margin:5px 0;font-size:13px;line-height:1.45}
+  .bub.q{background:#1f6fb0;color:#fff;margin-left:auto;border-bottom-right-radius:3px}
+  .bub.a{background:#192231;color:#e6edf3;border-bottom-left-radius:3px}
+  .askrow{display:flex;gap:6px}.askrow input{flex:1}
+  .askrow .send{width:64px;background:linear-gradient(180deg,#1f6fb0,#155488);border:1px solid #1f6fb0;color:#fff;border-radius:10px;font-weight:700;cursor:pointer}
+  .log .e{font-size:13px;padding:7px 0;border-bottom:1px dashed #1c2533}.log .e:last-child{border-bottom:0}
+  .log .ts{color:#5b6b7d;font-family:ui-monospace,monospace;font-size:11px;margin-right:6px}.warnmsg{color:var(--amber)}
+  .bottombar{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:#0f141b;flex:0 0 auto}
+  .monitor{flex:0 0 auto}
+  .bottombar .btn{padding:10px 6px;font-size:13px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
+  .scoreBig{font-size:42px;font-weight:900}
+  .rchip{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;margin-right:4px}
+  .rchip.ok{background:#12372b;border:1px solid #1d6b50;color:#7ef0c4}.rchip.bad{background:#3a1820;border:1px solid #6b2330;color:#ff9aa6}
+  .rchip.warn{background:#3a2f12;border:1px solid #6b561d;color:#ffd97a}.rchip.neu{background:#1c2533;border:1px solid #2a3647;color:#9fb0c3}
+  .vsnap{font-family:ui-monospace,monospace;font-size:10px;color:#7d8ea0}
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- START -->
+  <div id="start" class="pad">
+    <div style="text-align:center">
+      <div class="pill">🐾 ポケット獣急外来（試作）</div>
+      <h1>救急へようこそ、先生。</h1>
+      <p class="sub">初療室の物をタップして、必要な問診・検査・処置を選ぶ臨床推論シミュレーター。メニューは全症例共通。良し悪しは最終評価で初めて分かります。</p>
+    </div>
+    <div id="caseList"></div>
+    <p class="tiny" style="margin-top:12px">※教育用。用量・手技・実診療判断は最新の成書／添付文書／施設プロトコル（RECOVER等）で確認してください。投与量計算は扱いません。</p>
+  </div>
+
+  <!-- SIM -->
+  <div id="sim" class="hide" style="display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden">
+    <div class="monitor">
+      <div class="topbar"><span>🏥 初療室　<span id="clock">00:00</span></span><span id="alarm"></span></div>
+      <div class="monrow">
+        <div class="ecgwrap"><canvas id="mon" width="600" height="264"></canvas></div>
+        <div class="nums">
+          <div class="num nHR"><div class="l">HR /min</div><div class="v" id="nHR">–</div></div>
+          <div class="num nBP"><div class="l">SAP/DAP mmHg</div><div class="v" id="nBP">–</div></div>
+          <div class="num nSpO2"><div class="l">SpO₂ %</div><div class="v" id="nSpO2">–</div></div>
+          <div class="num nRR"><div class="l">RR /min</div><div class="v" id="nRR">–</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="ccchip" id="ccchip"></div>
+      <svg class="room" id="room" viewBox="0 0 400 320" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="statusbar" id="statusbar"></div>
+    </div>
+
+    <div class="bottombar">
+      <button class="btn" onclick="openLog()">📋 経過</button>
+      <button class="btn" onclick="openDx()">🧠 診断</button>
+      <button class="btn" onclick="openDispo()">🏷 方針</button>
+      <button class="btn primary" onclick="openFinal()">⏹ 決定</button>
+    </div>
+  </div>
+
+  <div id="result" class="hide pad"></div>
+  <div class="ov" id="ov"><div class="sheet" id="sheet"></div></div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   ポケット獣急外来（試作 v4）— アイソメトリック初療室UI
+   - エンジン（v3：共通カタログ＋症例ルール、隠し情報ゲート、前提/禁忌、中立表示）を踏襲
+   - UI：初療室ナビ／3波形モニター／構造化問診・診察／時刻＋バイタル付き評価
+   ========================================================================= */
+
+// ---------- カタログ（操作系：安定化/薬剤/検査/処置） ----------
+const CATALOG = [
+  { key:"stab", cat:"🫁 安定化", search:false, items:[
+    {id:"monitor",label:"モニター装着"},{id:"o2",label:"酸素投与"},{id:"ivc",label:"静脈路確保"},
+    {id:"io",label:"骨髄路確保"},{id:"fluids",label:"維持輸液"},{id:"bolus",label:"晶質液ボーラス（少量）"},
+    {id:"bigbolus",label:"大量急速輸液"},{id:"warm",label:"保温"},{id:"cool",label:"冷却"},{id:"cpcr",label:"CPCR（心肺蘇生）"},
+  ]},
+  { key:"drug", cat:"💊 薬剤棚", search:true, groups:[
+    {g:"鎮痛薬", items:[{id:"d_buprenor",label:"ブプレノルフィン"},{id:"d_butorph",label:"ブトルファノール"},{id:"d_methadone",label:"メサドン"},{id:"d_fentanyl",label:"フェンタニル"},{id:"d_meloxicam",label:"メロキシカム（NSAID）"},{id:"d_robena",label:"ロベナコキシブ（NSAID）"}]},
+    {g:"鎮静薬", items:[{id:"d_midazolam",label:"ミダゾラム"},{id:"d_propofol",label:"プロポフォール"},{id:"d_dexmed",label:"デクスメデトミジン"},{id:"d_medet",label:"メデトミジン"},{id:"d_acepro",label:"アセプロマジン"}]},
+    {g:"抗痙攣薬", items:[{id:"d_levetira",label:"レベチラセタム"},{id:"d_phenobarb",label:"フェノバルビタール"}]},
+    {g:"電解質・代謝", items:[{id:"d_calcium",label:"グルコン酸カルシウム"},{id:"d_dextrose",label:"ブドウ糖（静注）"},{id:"d_insulin",label:"速効型インスリン"},{id:"d_dexins",label:"ブドウ糖＋速効型インスリン"},{id:"d_bicarb",label:"重炭酸ナトリウム"},{id:"d_kcl",label:"塩化カリウム"}]},
+    {g:"昇圧・循環作動薬", items:[{id:"d_adrenalin",label:"アドレナリン"},{id:"d_norad",label:"ノルアドレナリン"},{id:"d_dobu",label:"ドブタミン"},{id:"d_atropine",label:"アトロピン"}]},
+    {g:"抗不整脈薬", items:[{id:"d_lidocaine",label:"リドカイン"},{id:"d_amiodaron",label:"アミオダロン"}]},
+    {g:"利尿薬・浸透圧薬", items:[{id:"d_furosem",label:"フロセミド"},{id:"d_mannitol",label:"マンニトール"}]},
+    {g:"抗菌薬", items:[{id:"d_ampi",label:"アンピシリン"},{id:"d_cefazolin",label:"セファゾリン"},{id:"d_enroflox",label:"エンロフロキサシン"},{id:"d_metronid",label:"メトロニダゾール"}]},
+    {g:"抗炎症・免疫抑制", items:[{id:"d_predniso",label:"プレドニゾロン"},{id:"d_dexameth",label:"デキサメタゾン"}]},
+    {g:"消化器薬", items:[{id:"d_maropit",label:"マロピタント"},{id:"d_metoclo",label:"メトクロプラミド"},{id:"d_famotid",label:"ファモチジン"}]},
+    {g:"呼吸器薬", items:[{id:"d_terbutal",label:"テルブタリン"},{id:"d_aminophy",label:"アミノフィリン"}]},
+    {g:"抗血栓薬", items:[{id:"d_aspirin",label:"アスピリン"},{id:"d_clopidog",label:"クロピドグレル"},{id:"d_heparin",label:"ヘパリン"}]},
+    {g:"拮抗薬・その他", items:[{id:"d_naloxone",label:"ナロキソン"},{id:"d_atipam",label:"アチパメゾール"}]},
+  ]},
+  { key:"lab", cat:"🖥 オーダーPC（検査）", search:true, groups:[
+    {g:"血液検査", items:[{id:"l_cbc",label:"CBC（血球計数）"},{id:"l_smear",label:"血液塗抹"},{id:"l_pcvtp",label:"PCV/TP"},{id:"l_glu",label:"血糖"},{id:"l_lactate",label:"乳酸"},{id:"l_gas",label:"血液ガス"},{id:"l_lyte",label:"電解質（Na/K/Cl/iCa）"},{id:"l_k",label:"K（カリウム）単独"},{id:"l_chem",label:"生化学（BUN/Cre/ALT等）"},{id:"l_coag",label:"凝固系"}]},
+    {g:"尿検査", items:[{id:"l_ua",label:"尿検査"},{id:"l_sediment",label:"尿沈渣"},{id:"l_uculture",label:"尿培養"}]},
+    {g:"感染症検査", items:[{id:"l_snap",label:"SNAP/感染症検査"}]},
+    {g:"生理検査", items:[{id:"l_bp",label:"血圧測定"},{id:"l_ecg",label:"心電図"}]},
+    {g:"画像：レントゲン（X線）", items:[{id:"l_thorax",label:"胸部X線"},{id:"l_abd",label:"腹部X線"}]},
+    {g:"画像：超音波（エコー）", items:[{id:"l_us",label:"腹部超音波"},{id:"l_fast",label:"AFAST/TFAST"},{id:"l_echo",label:"心エコー"}]},
+    {g:"画像：CT/MRI", items:[{id:"l_ctmri",label:"CT/MRI"}]},
+  ]},
+  { key:"proc", cat:"🛠 処置", search:false, items:[
+    {id:"p_thoraco",label:"胸腔穿刺"},{id:"p_abdomino",label:"腹腔穿刺"},{id:"p_cysto",label:"膀胱穿刺"},
+    {id:"p_ucath",label:"尿道カテーテル設置"},{id:"p_ogtube",label:"胃管（経口）"},{id:"p_gastrocen",label:"胃穿刺（経皮減圧）"},
+    {id:"p_intubate",label:"気管挿管"},{id:"p_chesttube",label:"胸腔ドレーン"},{id:"p_transfuse",label:"輸血"},
+    {id:"p_wound",label:"創処置"},{id:"p_surgery",label:"緊急手術"},
+  ]},
+];
+
+// ---------- 問診（系統別チップ）・自由入力照合 ----------
+const HX_GROUPS=[
+  {g:"主訴", items:[["hx_cc","主訴（どうされましたか）"],["hx_onset","発症様式・時期"],["hx_course","持続・経過"],["hx_trigger","誘因・きっかけ"]]},
+  {g:"随伴症状", items:[["hx_appetite","食欲・嘔吐・排便"],["hx_urine","排尿の状況"],["hx_resp","呼吸・咳・運動耐性"],["hx_fever","発熱・元気"],["hx_neuro","発作・ふらつき"]]},
+  {g:"既往・内服・生活", items:[["hx_pmh","既往歴・現在の投薬"],["hx_tox","誤食・中毒・外傷"],["hx_diet","食事・飲水・環境"],["hx_vacc","ワクチン・予防歴"]]},
+];
+const HX_KW={ hx_cc:["主訴","どうし","どうされ","訴え","なに","何が"],hx_onset:["いつ","発症","時期","始ま","から"],
+  hx_course:["経過","続","ずっと","だんだん"],hx_trigger:["誘因","きっかけ","原因","前に"],
+  hx_appetite:["食欲","嘔吐","吐","食べ","ごはん","便","下痢","うんち"],hx_urine:["尿","おしっこ","排尿","トイレ","出ない"],
+  hx_resp:["呼吸","咳","息","苦し","ハァ"],hx_fever:["発熱","熱","元気","ぐったり"],hx_neuro:["発作","ふらつき","痙攣","けいれん","めまい","倒れ"],
+  hx_pmh:["既往","過去","以前","前","持病","薬","内服","治療"],hx_tox:["誤食","中毒","異物","拾い","外傷","事故","ぶつ"],
+  hx_diet:["食事","水","飲","フード","環境","室内"],hx_vacc:["ワクチン","予防","接種"] };
+
+// ---------- 身体診察（系統別） ----------
+const EXAM_GROUPS=[
+  {g:"全身", items:[["ex_general","全体の様子・意識"],["ex_posture","体位・姿勢"]]},
+  {g:"皮膚・粘膜", items:[["ex_mm","可視粘膜色・CRT"],["ex_hydration","皮膚ツルゴール・脱水"],["ex_skin","皮膚・浮腫"]]},
+  {g:"頭頸部", items:[["ex_eye","眼瞼結膜"],["ex_jugular","頸静脈"],["ex_oral","口唇・口腔"]]},
+  {g:"循環器", items:[["ex_pulse","末梢動脈の触知"],["ex_heart","心音聴診"]]},
+  {g:"呼吸器", items:[["ex_thorax","肺音聴診"],["ex_effort","呼吸様式"]]},
+  {g:"腹部", items:[["ex_abd","腹部触診"]]},
+  {g:"泌尿生殖・会陰", items:[["ex_perineum","外陰部・会陰"]]},
+  {g:"四肢・神経", items:[["ex_limb","四肢・疼痛"],["ex_neuro","神経学的"]]},
+  {g:"体温", items:[["ex_temp","直腸温"]]},
+];
+
+// 全アクションのラベル表
+const ALL_LABELS={};
+CATALOG.forEach(c=>{
+  if(c.items)c.items.forEach(it=>ALL_LABELS[it.id]=it.label);
+  if(c.groups)c.groups.forEach(g=>g.items.forEach(it=>ALL_LABELS[it.id]=it.label));
+});
+HX_GROUPS.forEach(g=>g.items.forEach(it=>ALL_LABELS[it[0]]=it[1]));
+EXAM_GROUPS.forEach(g=>g.items.forEach(it=>ALL_LABELS[it[0]]=it[1]));
+function labelOf(id){ return ALL_LABELS[id]||id; }
+function actionType(id){ if(id.startsWith("hx_"))return"hx"; if(id.startsWith("ex_"))return"exam"; if(id.startsWith("l_"))return"lab"; if(id.startsWith("d_"))return"drug"; if(id.startsWith("p_"))return"proc"; return"stab"; }
+
+// ---------- 診断・方針 ----------
+const DIAGNOSES=[
+  {sys:"循環器",list:[["dx_chf","うっ血性心不全"],["dx_tampon","心タンポナーデ"],["dx_arrhythmia","重度不整脈"],["dx_ate","動脈血栓塞栓症"]]},
+  {sys:"呼吸器",list:[["dx_pleural","胸水貯留"],["dx_pneumonia","肺炎"],["dx_asthma","猫喘息/下気道疾患"],["dx_pneumothorax","気胸"],["dx_edema","非心原性肺水腫"]]},
+  {sys:"泌尿器",list:[["dx_uo","尿道閉塞"],["dx_aki","急性腎障害（腎後性）"],["dx_fic","特発性膀胱炎（非閉塞）"],["dx_urolith","尿石症"]]},
+  {sys:"消化器",list:[["dx_gdv","胃拡張胃捻転（GDV）"],["dx_fb","消化管異物/閉塞"],["dx_pancreatitis","膵炎"],["dx_hge","出血性胃腸炎"]]},
+  {sys:"代謝/内分泌",list:[["dx_hyperk","高カリウム血症"],["dx_dka","糖尿病性ケトアシドーシス"],["dx_hypoglycemia","低血糖"],["dx_addison","アジソン病"]]},
+  {sys:"中毒/血液",list:[["dx_tox","中毒"],["dx_imha","免疫介在性溶血性貧血"],["dx_anemia","重度貧血"]]},
+  {sys:"神経",list:[["dx_seizure","てんかん重積"],["dx_ivdd","椎間板ヘルニア"]]},
+];
+function dxLabel(id){ for(const g of DIAGNOSES)for(const d of g.list)if(d[0]===id)return d[1]; return id; }
+const DISPOSITIONS=[["do_out","外来管理"],["do_admit","入院管理"],["do_surgery","緊急手術"],["do_refer","二次診療紹介"],["do_icu","ICU管理"]];
+
+// ---------- 既定結果（中立・無判定） ----------
+function defaultResult(id){
+  const t=actionType(id);
+  if(t==="hx")  return {text:"特記すべき訴えは聞かれなかった。",time:30,s:0};
+  if(t==="exam")return {text:"特記すべき異常を認めない。",time:60,s:0};
+  if(t==="lab") return {text:"明らかな異常を認めない。",time:120,s:-1,unnec:true};
+  if(t==="drug")return {text:"投与した。経過を観察する。",time:90,s:-2,unnec:true};
+  if(t==="proc")return {text:"実施した。",time:180,s:-2,unnec:true};
+  return {text:"実施した。",time:60,s:0};
+}
+
+// ---------- 症例定義 ----------
+const CASES = {
+  cat_uo:{
+    id:"cat_uo", icon:"🐈", title:"排尿姿勢をくり返す若い雄猫", level:"★★☆", patient:"cat",
+    signalment:"猫 3歳 去勢雄 雑種 5.2kg",
+    open:"昨日から何度もトイレに行くが尿が出ていない。今朝からぐったりして、下腹部を痛がる。",
+    hidden:{HR:96,SBP:88,SpO2:96,RR:40,temp:36.5,K:8.5},
+    physiology(S){
+      const relieved=S.flags.has("p_ucath"), decomp=S.flags.has("p_cysto");
+      if(!relieved&&!decomp)S.h.K+=0.012;
+      if(S.flags.has("d_insulin")||S.flags.has("d_dexins"))S.h.K-=0.05;
+      if(S.flags.has("d_bicarb"))S.h.K-=0.02;
+      if(relieved||decomp)S.h.K-=0.03;
+      if(S.flags.has("fluids")||S.flags.has("bolus")||S.flags.has("bigbolus"))S.h.K-=0.008;
+      S.h.K=clamp(S.h.K,3.2,12);
+      const prot=S.caT>0;
+      S.h.HR+=(((S.h.K>=9&&!prot?38:S.h.K>=7.5?(prot?120:84):S.h.K>=6?150:170))-S.h.HR)*0.25;
+      let tBP=(S.flags.has("fluids")||S.flags.has("bolus")||S.flags.has("bigbolus"))?118:86; if(relieved)tBP+=6;
+      S.h.SBP+=(tBP-S.h.SBP)*0.15;
+      S.h.SpO2+=((S.flags.has("o2")?99:96)-S.h.SpO2)*0.3;
+      S.h.temp+=(((S.flags.has("fluids")||S.flags.has("warm"))?38.2:36.4)-S.h.temp)*0.05;
+      if(S.h.K>=9.6&&!prot)S.arrest=true;
+    },
+    correctDx:["dx_uo","dx_hyperk","dx_aki"], primaryDx:"dx_uo", correctDispo:["do_admit","do_icu"],
+    res:{
+      hx_cc:{text:"排尿しようとしても出ない。今朝からぐったりして、下腹部を痛がる。",s:2,time:30},
+      hx_urine:{text:"昨夕から尿が出ず、頻回にトイレへ行くが少量。今朝からは全く出ていない。",s:6,time:30,flag:["hx_anuria"],tag:"good"},
+      hx_appetite:{text:"今朝から2回嘔吐。昨夜から食欲なし。",s:2,time:30},
+      hx_onset:{text:"昨日夕方からの急性経過。",s:1,time:30},
+      hx_pmh:{text:"半年前にも一度、排尿しづらいことがあった。",s:1,time:30},
+      ex_abd:{text:"下腹部に大きく硬く緊満した疼痛性の膀胱を触知する。",s:8,time:60,flag:["bladder_known"],tag:"critical",miss:-12},
+      ex_perineum:{text:"陰茎先端に砂状の栓子、亀頭が暗紫色。",s:4,time:60,tag:"good"},
+      ex_mm:{text:"可視粘膜やや蒼白、CRT 2.5秒、末梢冷感。",s:3,time:60},
+      ex_general:{text:"沈鬱。刺激への反応はある。",s:1,time:60},
+      ex_pulse:{text:"末梢動脈は触知良好だがやや弱い。",s:1,time:60},
+      monitor:{text:"モニターを装着。HR/SpO₂/RR/血圧を表示。徐脈傾向。",s:3,time:30,reveal:["HR","SBP","SpO2","RR"],flag:["monitored"],tag:"good"},
+      ivc:{text:"静脈路を確保した。",s:5,time:60,flag:["iv"],tag:"critical",miss:-12},
+      fluids:{text:"維持輸液を開始した。",s:3,time:30},
+      bolus:{text:"少量の晶質液ボーラスを実施。末梢冷感と血圧がやや改善。",s:5,time:30,tag:"good",need:[{f:["iv"],pen:-4,msg:"静脈路確保前に輸液を始めようとした。"}]},
+      bigbolus:{text:"大量急速輸液を実施。猫では過剰輸液に注意。",s:1,time:30},
+      warm:{text:"保温を開始。低体温傾向に対応。",s:3,time:30,reveal:["temp"],tag:"good"},
+      ex_temp:{text:"直腸温 36.5℃（低体温）。",s:1,time:60,reveal:["temp"]},
+      l_ecg:{text:"P波平低化〜消失、テント状T波、QRS幅延長、徐脈。",s:8,time:120,reveal:["ecg","K"],flag:["hyperk_known"],tag:"critical",miss:-16},
+      l_lyte:{text:"Na 148、K 8.5、Cl 112、iCa 1.05。Kが著明高値。",s:8,time:120,reveal:["K"],flag:["hyperk_known"],tag:"critical",miss:-16},
+      l_k:{text:"K 8.5 mEq/L（著明高値）。",s:8,time:120,reveal:["K"],flag:["hyperk_known"],tag:"critical",miss:-16},
+      l_gas:{text:"pH 7.18、HCO₃⁻ 12、BE −13、K 8.5。代謝性アシドーシス。",s:5,time:120,reveal:["K"],flag:["hyperk_known"]},
+      l_chem:{text:"BUN 86、Cre 6.8、Glu 146。高窒素血症。",s:4,time:120,flag:["azotemia"],tag:"good"},
+      l_glu:{text:"血糖 146 mg/dL。低血糖なし。",s:1,time:120},
+      l_pcvtp:{text:"PCV 45% / TP 7.8。脱水傾向。",s:2,time:120},
+      l_us:{text:"膀胱は著明に拡張・緊満、尿道内に高エコー栓子。腎軽度腫大。",s:4,time:180,flag:["bladder_known"],tag:"good"},
+      l_abd:{text:"膀胱の著明な拡大。明らかなX線不透過性結石は指摘できず。",s:2,time:180,flag:["bladder_known"]},
+      ex_effort:{text:"呼吸様式に明らかな異常なし。",s:0,time:60},
+      d_calcium:{text:"グルコン酸カルシウムを緩徐投与。心電図のT波増高とQRS幅がやや改善。",s:10,time:60,fx:S=>{S.caT=15*60;},flag:["ca_protect"],tag:"critical",miss:-16,need:[{f:["hyperk_known"],pen:-4,msg:"高K血症の根拠を確認する前に投与した。"}]},
+      d_dexins:{text:"ブドウ糖＋速効型インスリンを投与。Kが一時的に低下。以後の血糖モニタが必要。",s:8,time:60,flag:["k_shift","glu_monitor"],tag:"good",need:[{f:["hyperk_known"],pen:-6,msg:"K測定前にインスリン治療を行った。"}]},
+      d_insulin:{text:"速効型インスリンを投与した。",s:-4,time:60,flag:["k_shift"],need:[{f:["glu_paired"],pen:-4,msg:"ブドウ糖併用・血糖モニタなしでは低血糖リスク。"}]},
+      d_dextrose:{text:"ブドウ糖を静注した。",s:0,time:60,flag:["glu_paired"]},
+      d_bicarb:{text:"重炭酸ナトリウムを投与した。",s:2,time:60},
+      d_buprenor:{text:"ブプレノルフィンで鎮痛した。",s:3,time:60,tag:"good"},
+      d_fentanyl:{text:"フェンタニルで鎮痛した（呼吸循環モニタ必要）。",s:3,time:60,tag:"good"},
+      p_cysto:{text:"膀胱穿刺で一時的に減圧。腹痛と膀胱緊満が軽減。",s:6,time:120,flag:["decompressed"],tag:"good",need:[{f:["bladder_known"],pen:-4,msg:"膀胱緊満を確認せずに穿刺した。"}]},
+      p_ucath:{text:"尿道カテーテルを設置し閉塞を解除。血尿混じりの尿が流出。閉塞後利尿が始まる。",s:10,time:180,flag:["relieved"],tag:"critical",miss:-30,need:[{f:["iv"],pen:-8,msg:"静脈路確保前に鎮静・処置へ進んだ。"},{f:["ca_protect"],pen:-10,msg:"重度高Kが疑われる状況で心筋保護前に処置へ進んだ。"}]},
+      d_furosem:{text:"フロセミドを投与した。",s:0,time:60,tag:"harmful",verdict:"閉塞解除前の利尿薬は無効で、脱水・循環不全を悪化させる。",contra:[{f:["relieved"],invert:true,pen:-12,msg:""}],fx:S=>{if(!S.flags.has("p_ucath"))S.h.SBP-=8;}},
+      d_meloxicam:{text:"メロキシカムを投与した。",s:-14,time:60,flag:["nsaid"],tag:"harmful",verdict:"腎後性AKI・循環不全が疑われる状況でNSAIDは腎血流を悪化させ不適切。"},
+      d_robena:{text:"ロベナコキシブを投与した。",s:-14,time:60,flag:["nsaid"],tag:"harmful",verdict:"AKI疑い下のNSAIDは避けるべき。"},
+      d_dexmed:{text:"デクスメデトミジンを投与した。",s:-12,time:60,tag:"harmful",verdict:"徐脈・高K・循環不全が疑われる状態でのα2作動薬は危険。",fx:S=>{S.h.HR-=12;}},
+      d_medet:{text:"メデトミジンを投与した。",s:-12,time:60,tag:"harmful",verdict:"徐脈・高K・循環不全が疑われる状態でのα2作動薬は危険。",fx:S=>{S.h.HR-=12;}},
+      d_acepro:{text:"アセプロマジンを投与した。",s:-8,time:60,tag:"harmful",verdict:"血管拡張で低血圧を助長し不適切。"},
+      d_atropine:{text:"アトロピンを投与した。",s:-4,time:60,tag:"harmful",verdict:"高K血症性徐脈にアトロピンは根本治療ではない。心筋保護とK低下を優先。"},
+      d_kcl:{text:"塩化カリウムを投与した。",s:-16,time:60,tag:"harmful",verdict:"高K血症の患者にKClは禁忌。",fx:S=>{S.h.K+=0.6;}},
+      p_surgery:{text:"緊急開腹を選択した。",s:-10,time:600,tag:"harmful",verdict:"通常の尿道閉塞初期対応として過剰。まず安定化とカテーテル解除を。"},
+      l_ctmri:{text:"CT/MRIを実施した。",s:-10,time:600,tag:"harmful",verdict:"鎮静/麻酔を要する高度画像より初期安定化と閉塞解除が優先。"},
+    },
+    recheckBonus:{l_lyte:6,l_k:6,l_gas:6,l_chem:5},
+    finalNote:"硬く緊満した膀胱・無尿・沈鬱・徐脈傾向から尿道閉塞＋腎後性AKI＋高K血症を最優先に。ECGとKで重症度を評価し、静脈路→輸液→グルコン酸Caで心筋保護（Ca自体はKを下げない）→必要に応じK低下治療→膀胱穿刺で一時減圧→尿道カテーテルで根本解除。解除後はK・腎数値・再閉塞を入院下でモニタ。",
+  },
+  dog_gdv:{
+    id:"dog_gdv", icon:"🐕", title:"腹部が膨れ、えずいている大型犬", level:"★★★", patient:"dog",
+    signalment:"犬 6歳 去勢雄 グレートデン 48kg",
+    open:"夕食後に落ち着かず、腹がパンパンに膨れてきた。吐こうとするが何も出ない。",
+    hidden:{HR:160,SBP:78,SpO2:95,RR:48,temp:38.2,lactate:6.5},
+    physiology(S){
+      const decomp=S.flags.has("p_ogtube")||S.flags.has("p_gastrocen");
+      const resus=S.flags.has("bolus")||S.flags.has("bigbolus")||S.flags.has("fluids");
+      S.h.HR+=(((S.flags.has("p_surgery")?90:resus&&decomp?120:resus?140:165))-S.h.HR)*0.2;
+      let tBP=S.flags.has("p_surgery")?115:((S.flags.has("bolus")||S.flags.has("bigbolus"))?(decomp?108:96):(resus?90:76));
+      S.h.SBP+=(tBP-S.h.SBP)*0.18;
+      if(decomp)S.h.lactate-=0.04; if(resus)S.h.lactate-=0.02;
+      if(!decomp&&!S.flags.has("p_surgery"))S.h.lactate+=0.02;
+      S.h.lactate=clamp(S.h.lactate,1,12);
+      S.h.SpO2+=((S.flags.has("o2")?98:95)-S.h.SpO2)*0.3;
+      S.h.RR+=(((decomp?30:48))-S.h.RR)*0.1;
+      if(S.h.SBP<60&&S.h.lactate>9)S.arrest=true;
+    },
+    correctDx:["dx_gdv"], primaryDx:"dx_gdv", correctDispo:["do_surgery","do_icu"],
+    res:{
+      hx_cc:{text:"夕食後に腹が膨れ、吐こうとするが出ない。落ち着かない。",s:2,time:30},
+      hx_onset:{text:"夕食後の急性発症。腹部膨満が進行。",s:3,time:30,tag:"good"},
+      hx_appetite:{text:"吐こうとするが何も出ない（非生産的嘔吐）。",s:4,time:30,tag:"good"},
+      ex_abd:{text:"腹部は太鼓様に膨満、鼓音、強い緊張。",s:7,time:60,tag:"critical",miss:-12},
+      ex_mm:{text:"粘膜蒼白、CRT 3秒。",s:3,time:60,tag:"good"},
+      ex_pulse:{text:"末梢動脈は速く弱い。",s:3,time:60,tag:"good"},
+      ex_general:{text:"不穏、起立を繰り返す、流涎。",s:1,time:60},
+      ex_temp:{text:"直腸温 38.2℃。",s:0,time:60,reveal:["temp"]},
+      monitor:{text:"モニターを装着。頻脈。",s:3,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
+      o2:{text:"酸素投与を開始。",s:2,time:30},
+      ivc:{text:"太い静脈路を確保した（できれば両前肢）。",s:5,time:60,flag:["iv"],tag:"critical",miss:-12},
+      bolus:{text:"晶質液ショックボーラスを開始。循環を補正。",s:7,time:30,tag:"critical",miss:-12,need:[{f:["iv"],pen:-4,msg:"静脈路確保前に輸液を始めようとした。"}]},
+      bigbolus:{text:"大量急速輸液を実施。",s:4,time:30,need:[{f:["iv"],pen:-4,msg:"静脈路確保前。"}]},
+      fluids:{text:"維持輸液を開始した。",s:2,time:30},
+      d_buprenor:{text:"オピオイドで鎮痛した。",s:3,time:60,tag:"good"},
+      d_methadone:{text:"メサドンで鎮痛した。",s:3,time:60,tag:"good"},
+      d_lidocaine:{text:"心室性不整脈に対しリドカインを投与した。",s:2,time:60},
+      l_abd:{text:"右側臥位像で胃の著明な拡張と区画化（ダブルバブル様）。捻転を示唆。",s:8,time:120,reveal:["xray"],tag:"critical",miss:-14},
+      l_gas:{text:"代謝性アシドーシス、Lactate 6.5（上昇）。",s:4,time:120,reveal:["lactate"],tag:"good"},
+      l_pcvtp:{text:"PCV 55 / TP 7.8（血液濃縮）。",s:2,time:120},
+      l_ecg:{text:"散発する心室性期外収縮（VPC）。",s:2,time:120},
+      p_gastrocen:{text:"経皮で胃を穿刺・減圧。ガスが抜け腹圧が低下。",s:6,time:120,flag:["decomp"],tag:"good"},
+      p_ogtube:{text:"胃管で減圧を試みた（捻転では通過困難なことあり）。",s:5,time:120,flag:["decomp"],tag:"good"},
+      p_surgery:{text:"開腹し整復・胃固定を行った。",s:10,time:600,tag:"critical",miss:-20},
+      d_acepro:{text:"アセプロマジンを投与した。",s:-10,time:60,tag:"harmful",verdict:"ショックの犬に血管拡張薬は低血圧を増悪させ危険。"},
+      d_meloxicam:{text:"メロキシカムを投与した。",s:-9,time:60,tag:"harmful",verdict:"ショック・脱水下のNSAIDは腎・消化管障害を助長。"},
+      d_robena:{text:"ロベナコキシブを投与した。",s:-9,time:60,tag:"harmful",verdict:"ショック下のNSAIDは不適切。"},
+      d_dexmed:{text:"デクスメデトミジンを投与した。",s:-8,time:60,tag:"harmful",verdict:"循環不安定下の強い鎮静は危険。"},
+    },
+    finalNote:"大型犬の急性腹部膨満＋非生産的嘔吐＋ショックはGDVを最優先。右側臥位X線で胃の区画化を確認。①太い静脈路＋ショックボーラス、②胃の減圧、③鎮痛、④速やかな開腹整復・胃固定。NSAIDや強い鎮静はショックを悪化させ危険。",
+  },
+  cat_resp:{
+    id:"cat_resp", icon:"🐱", title:"口を開けて苦しそうに呼吸する猫", level:"★★★", patient:"cat",
+    signalment:"猫 9歳 避妊雌 雑種 4.0kg",
+    open:"昨夜から呼吸が速く、今朝は口を開けて苦しそう。動きたがらず、伏せたまま。",
+    hidden:{HR:200,SBP:120,SpO2:86,RR:70,temp:38.0},
+    physiology(S){
+      const stress=S.stress||0; const tapped=S.flags.has("p_thoraco")||S.flags.has("p_chesttube");
+      S.h.SpO2+=(((tapped?97:(S.flags.has("o2")?(92-stress*4):(86-stress*5))))-S.h.SpO2)*0.3;
+      S.h.RR+=(((tapped?34:((S.flags.has("o2")?56:70)+stress*8)))-S.h.RR)*0.25;
+      S.h.HR+=(((tapped?170:200))-S.h.HR)*0.1;
+      if(S.h.SpO2<70)S.arrest=true;
+    },
+    correctDx:["dx_pleural","dx_chf"], primaryDx:"dx_pleural", correctDispo:["do_admit","do_icu"],
+    res:{
+      hx_cc:{text:"昨夜から呼吸が速く、今朝は口を開けて苦しそう。伏せたまま動かない。",s:2,time:30},
+      hx_resp:{text:"昨夜から呼吸が速く、今朝は開口呼吸。運動を嫌がる。",s:4,time:30,tag:"good"},
+      monitor:{text:"モニターを装着（ストレスに注意）。",s:2,time:30,reveal:["HR","SpO2","RR"]},
+      o2:{text:"酸素室で酸素化。安静が保て、努力性呼吸がやや軽減。",s:8,time:30,tag:"critical",miss:-16},
+      ex_thorax:{text:"心音・肺音が減弱、特に腹側で聴取しにくい。",s:4,time:60,tag:"good"},
+      ex_effort:{text:"起座・開口呼吸、著明な努力性呼吸。",s:3,time:60,tag:"good"},
+      ex_general:{text:"伏臥、動きたがらない。",s:1,time:60},
+      ex_mm:{text:"可視粘膜やや チアノーゼ様。",s:2,time:60},
+      ex_temp:{text:"直腸温 38.0℃。",s:0,time:60,reveal:["temp"]},
+      l_fast:{text:"TFAST：両側胸腔に無エコー貯留。肺は虚脱。",s:8,time:90,reveal:["fast"],tag:"critical",miss:-12},
+      l_echo:{text:"心エコーで左房拡大、心筋肥厚。胸水あり。",s:5,time:120,tag:"good"},
+      l_thorax:{text:"撮影のため保定した。撮影中に呼吸状態が悪化した。",s:-6,time:120,tag:"harmful",verdict:"呼吸不安定な猫を保定してのX線はストレスで急変を招きうる。先に酸素と最小ハンドリングを。",fx:S=>{S.stress=(S.stress||0)+1;}},
+      d_butorph:{text:"ブトルファノールで軽い鎮静。ストレスと呼吸努力が軽減。",s:4,time:60,tag:"good"},
+      d_furosem:{text:"フロセミドを投与した。",s:4,time:60,tag:"good"},
+      p_thoraco:{text:"胸腔穿刺で胸水を排液。呼吸が明らかに楽になる。",s:10,time:120,reveal:["fast"],tag:"critical",miss:-16},
+      p_chesttube:{text:"胸腔ドレーンを留置した。",s:4,time:180,tag:"good"},
+      bolus:{text:"晶質液ボーラスを実施した。",s:-10,time:30,tag:"harmful",verdict:"胸水/心原性が疑われる猫への輸液ボーラスは肺水腫・胸水を悪化させる。"},
+      bigbolus:{text:"大量急速輸液を実施した。",s:-12,time:30,tag:"harmful",verdict:"呼吸不安定な猫への大量輸液は禁物。"},
+      fluids:{text:"輸液を開始した。",s:-4,time:30,tag:"harmful",verdict:"呼吸不安定な猫への積極的輸液は慎重に。"},
+      ex_abd:{text:"腹部触診のため保定した。呼吸状態が悪化した。",s:-4,time:60,tag:"harmful",verdict:"呼吸不安定時の強い保定はストレスで急変を招く。",fx:S=>{S.stress=(S.stress||0)+1;}},
+      d_dexmed:{text:"デクスメデトミジンを投与した。",s:-5,time:60,tag:"harmful",verdict:"呼吸抑制のリスク。"},
+    },
+    finalNote:"開口・起座呼吸の猫はまず酸素と最小ハンドリングが命綱。保定やX線はストレスで急変しうる。TFAST/胸腔穿刺で胸水を確認・排液（診断的かつ治療的）。心原性が疑われればフロセミド。呼吸不安定な猫への積極的輸液は禁物。",
+  },
+};
+
+// ---------- 状態・エンジン ----------
+let S=null,timer=null,wf=null,reopen=null,arrestShown=false; const STEP=30;
+
+function listCases(){
+  document.getElementById('caseList').innerHTML=Object.values(CASES).map(c=>
+    `<div class="card" onclick="startCase('${c.id}')" style="cursor:pointer">
+       <div style="display:flex;gap:10px;align-items:center"><div style="font-size:28px">${c.icon}</div>
+       <div><b>${c.title}</b><div class="tiny">${c.signalment}　/　難易度 ${c.level}</div></div></div></div>`).join('')+
+    `<div class="tiny" style="margin-top:6px">どの症例でもメニューは共通です。</div>`;
+}
+function startCase(cid){
+  const C=CASES[cid];
+  document.getElementById('start').classList.add('hide');
+  document.getElementById('result').classList.add('hide');
+  document.getElementById('sim').classList.remove('hide');
+  S={cid,C,t:0,h:JSON.parse(JSON.stringify(C.hidden)),
+     disp:{HR:NaN,SBP:NaN,SpO2:NaN,RR:NaN},
+     flags:new Set(),cflags:new Set(),revealed:new Set(),
+     sel:new Set(),scored:new Set(),dx:new Set(),dispo:null,snap:{},
+     caT:0,stress:0,arrest:false,dead:false,rosc:false,score:0,log:[]};
+  arrestShown=false; reopen=null;
+  document.getElementById('ccchip').textContent="主訴：「"+C.open+"」";
+  log("搬入。");
+  drawRoom(); setupMon(); render();
+  if(timer)clearInterval(timer); timer=setInterval(tick,1000);
+}
+function tick(){
+  if(S.dead)return; S.t+=STEP; if(S.caT>0)S.caT-=STEP;
+  S.C.physiology(S);
+  if(S.flags.has("monitor")){ for(const k of ["HR","SBP","SpO2","RR"]){ if(!S.revealed.has(k))continue;
+    if(isNaN(S.disp[k]))S.disp[k]=S.h[k]; S.disp[k]+=(S.h[k]-S.disp[k])*0.5; } }
+  if(S.arrest&&!S.rosc&&!S.dead)onArrest();
+  render();
+}
+function onArrest(){
+  if(arrestShown)return; arrestShown=true; S.disp.HR=0;S.disp.SBP=0;S.disp.SpO2=0;
+  log("⚠ 心停止に至った。"); document.getElementById('alarm').textContent="🔴 CARDIAC ARREST";
+  openSheet(`<h3>🔴 心停止<button class="x" onclick="closeSheet()">×</button></h3>
+    <p class="tiny">原疾患への対処が遅れ、心停止に至りました。根本原因に対処できていないと蘇生反応は乏しいです。</p>
+    <button class="btn" style="margin-bottom:8px" onclick="tryResus()">CPCRを試みる</button>
+    <button class="btn primary" onclick="closeSheet();finalize()">最終評価へ</button>`);
+}
+function tryResus(){
+  const ok=S.cid==="cat_uo"?(S.caT>0&&(S.flags.has("p_cysto")||S.flags.has("p_ucath")))
+         :S.cid==="dog_gdv"?(S.flags.has("p_gastrocen")||S.flags.has("p_ogtube"))
+         :S.flags.has("p_thoraco");
+  if(ok){ S.arrest=false;S.rosc=true;arrestShown=false; log("✅ ROSC（自己心拍再開）。");
+    document.getElementById('alarm').textContent="🟢 ROSC"; closeSheet(); }
+  else{ S.dead=true; clearInterval(timer); log("蘇生に反応せず。"); closeSheet(); finalize(); }
+}
+
+// ---------- アクション ----------
+function res(id){ return (S.C.res&&S.C.res[id])?S.C.res[id]:defaultResult(id); }
+function doAction(id){
+  if(S.dead)return;
+  const C=S.C, isLab=actionType(id)==="lab", first=!S.scored.has(id);
+  if(!first&&!isLab){ return; }
+  const r=res(id);
+  S.sel.add(id); S.flags.add(id); S.t+=(r.time||60);
+  if(r.reveal)r.reveal.forEach(k=>S.revealed.add(k));
+  if(first){
+    if(typeof r.fx==="function")r.fx(S);
+    if(r.flag)r.flag.forEach(f=>S.cflags.add(f));
+    if(typeof r.s==="number")S.score+=r.s;
+    if(r.need)r.need.forEach(n=>{ if(n.f.some(f=>!S.cflags.has(f))){ S.score+=n.pen; if(n.msg)logWarn(n.msg);} });
+    if(r.contra)r.contra.forEach(c=>{ const hit=c.invert?c.f.some(f=>!S.cflags.has(f)):c.f.some(f=>S.cflags.has(f)); if(hit){ S.score+=c.pen; if(c.msg)logWarn(c.msg);} });
+    S.snap[id]={t:S.t,HR:Math.round(S.h.HR),SBP:Math.round(S.h.SBP),SpO2:Math.round(S.h.SpO2),temp:S.h.temp};
+    S.scored.add(id);
+  }
+  if(isLab&&C.recheckBonus&&C.recheckBonus[id]&&S.flags.has("p_ucath")&&!S.cflags.has("rk_"+id)){
+    S.cflags.add("rk_"+id); S.score+=C.recheckBonus[id]; logWarn("閉塞解除後の再評価。");
+  }
+  log(`${labelOf(id)}：${r.text}${(!first&&isLab)?'（再評価）':''}`);
+  if(id==="monitor"){ for(const k of ["HR","SBP","SpO2","RR"]) if(S.revealed.has(k))S.disp[k]=S.h[k]; }
+  render(); if(reopen)reopen();
+}
+
+// ---------- 初療室（SVG） ----------
+function drawRoom(){
+  const pic=S.C.icon;
+  document.getElementById('room').innerHTML=`
+    <!-- floor & walls -->
+    <polygon points="200,96 372,186 200,276 28,186" fill="#16324a"/>
+    <polygon points="28,186 200,96 200,40 28,130" fill="#1c3e5c"/>
+    <polygon points="372,186 200,96 200,40 372,130" fill="#15334e"/>
+    <!-- wall monitor -> 安定化(モニター) -->
+    <g class="station" onclick="openCat('stab')">
+      <rect x="56" y="64" width="58" height="40" rx="5" fill="#04130d" stroke="#1d6b50"/>
+      <polyline points="62,86 70,86 74,74 80,98 86,82 92,86 108,86" fill="none" stroke="#37e08a" stroke-width="2"/>
+      <text class="lab" x="58" y="118">モニター</text>
+      <rect class="hit" x="44" y="56" width="84" height="70"/>
+    </g>
+    <!-- O2 tank -> 安定化 -->
+    <g class="station" onclick="openCat('stab')">
+      <rect x="126" y="96" width="20" height="44" rx="9" fill="#2f9e6e"/><rect x="131" y="88" width="10" height="12" fill="#9fe6c6"/>
+      <text class="lab" x="112" y="156">🫁 安定化</text>
+      <rect class="hit" x="108" y="84" width="74" height="80"/>
+    </g>
+    <!-- IV pole -> 安定化 -->
+    <g class="station" onclick="openCat('stab')">
+      <line x1="166" y1="72" x2="166" y2="150" stroke="#7f93a6" stroke-width="3"/>
+      <rect x="158" y="78" width="16" height="20" rx="3" fill="#bcdcff" opacity=".85"/>
+      <text class="lab" x="150" y="168">💧 輸液</text>
+    </g>
+    <!-- patient bed -> 患者対応 -->
+    <g class="station" onclick="openPatient()">
+      <polygon points="196,150 286,196 232,224 142,178" fill="#e8f1fb"/>
+      <polygon points="196,150 142,178 142,166 196,138" fill="#c9def2"/>
+      <text x="206" y="178" font-size="26">${pic}</text>
+      <text class="lab" x="176" y="238">🐾 患者（問診・診察）</text>
+      <rect class="hit" x="140" y="132" width="150" height="100"/>
+    </g>
+    <!-- PC -> 検査 -->
+    <g class="station" onclick="openCat('lab')">
+      <rect x="300" y="150" width="44" height="30" rx="3" fill="#0c1b2a" stroke="#3a6da0"/>
+      <rect x="316" y="180" width="12" height="8" fill="#3a6da0"/>
+      <text class="lab" x="296" y="206">🖥 検査PC</text>
+      <rect class="hit" x="292" y="142" width="64" height="74"/>
+    </g>
+    <!-- drug cart -> 薬剤棚 -->
+    <g class="station" onclick="openCat('drug')">
+      <rect x="296" y="232" width="56" height="38" rx="5" fill="#caa15a"/>
+      <line x1="296" y1="248" x2="352" y2="248" stroke="#8a6a2f" stroke-width="2"/><line x1="296" y1="260" x2="352" y2="260" stroke="#8a6a2f" stroke-width="2"/>
+      <text class="lab" x="290" y="286">💊 薬剤カート</text>
+      <rect class="hit" x="288" y="224" width="74" height="74"/>
+    </g>
+    <!-- procedure tray -> 処置 -->
+    <g class="station" onclick="openCat('proc')">
+      <rect x="60" y="232" width="60" height="20" rx="4" fill="#9fb3c6"/>
+      <rect x="72" y="222" width="6" height="14" fill="#cfe0f0"/><rect x="86" y="220" width="6" height="16" fill="#cfe0f0"/><rect x="100" y="224" width="6" height="12" fill="#cfe0f0"/>
+      <text class="lab" x="58" y="268">🛠 処置台</text>
+      <rect class="hit" x="52" y="214" width="80" height="62"/>
+    </g>`;
+}
+
+// ---------- 描画 ----------
+function render(){
+  document.getElementById('clock').textContent=fmt(S.t);
+  const show=k=>(S.flags.has("monitor")&&S.revealed.has(k)&&!isNaN(S.disp[k]));
+  set('nHR',S.arrest?"0":show("HR")?Math.round(S.disp.HR):"–");
+  if(S.arrest)set('nBP',"–"); else if(show("SBP")){const sb=Math.round(S.disp.SBP),db=Math.round(S.disp.SBP*0.62);
+    document.getElementById('nBP').innerHTML=sb+"/"+db;} else set('nBP',"–");
+  set('nSpO2',S.arrest?"–":show("SpO2")?Math.round(S.disp.SpO2):"–");
+  set('nRR',S.arrest?"0":show("RR")?Math.round(S.disp.RR):"–");
+  // status bar
+  const sb=[];
+  sb.push("🫁 酸素:<b>"+(S.flags.has("o2")?"あり":"なし")+"</b>");
+  sb.push("💧 輸液:<b>"+((S.flags.has("fluids")||S.flags.has("bolus")||S.flags.has("bigbolus"))?"あり":"なし")+"</b>");
+  sb.push("🩺 静脈路:<b>"+(S.flags.has("ivc")?"確保":"なし")+"</b>");
+  if(S.revealed.has("temp"))sb.push("🌡 <b>"+S.h.temp.toFixed(1)+"℃</b>");
+  if(S.revealed.has("K"))sb.push("🧪 K <b>"+S.h.K.toFixed(1)+"</b>");
+  if(S.revealed.has("lactate"))sb.push("🧪 Lac <b>"+S.h.lactate.toFixed(1)+"</b>");
+  document.getElementById('statusbar').innerHTML=sb.join("");
+  const al=document.getElementById('alarm');
+  if(!S.arrest&&!S.rosc){
+    if(show("SpO2")&&S.disp.SpO2<90)al.innerHTML='<span style="color:var(--amber)">⚠ 低酸素</span>';
+    else if(show("SBP")&&S.disp.SBP<85)al.innerHTML='<span style="color:var(--amber)">⚠ 低血圧</span>';
+    else if(show("HR")&&(S.disp.HR<60||S.disp.HR>180))al.innerHTML='<span style="color:var(--amber)">⚠ 心拍異常</span>';
+    else al.textContent='';
+  }
+}
+
+// ---------- カテゴリ・シート ----------
+const OG=new Set(); // 開いているグループを記憶
+function onGroupToggle(elem){ const g=elem.getAttribute('data-g'); if(elem.open)OG.add(g); else OG.delete(g); }
+function catByKey(k){ return CATALOG.find(c=>c.key===k); }
+function openCat(key){
+  reopen=()=>{ if(document.getElementById('ov').classList.contains('show'))renderCat(key); };
+  renderCat(key);
+}
+function itemBtn(id,label){ const sel=S.sel.has(id);
+  return `<button class="item ${sel?'sel':''}" onclick="doAction('${id}')"><span class="tick">${sel?'✓':'＋'}</span><span>${label}</span></button>`; }
+function renderCat(key){
+  const c=catByKey(key);
+  const q=(window._csearch||'').toLowerCase();
+  let h=`<h3>${c.cat}<button class="x" onclick="closeSheet()">×</button></h3>`;
+  if(c.search)h+=`<input id="catsearch" type="text" placeholder="🔎 検索" value="${window._csearch||''}" oninput="window._csearch=this.value;renderCat('${key}')" style="margin-bottom:8px">`;
+  if(c.groups){
+    let any=false;
+    for(const grp of c.groups){
+      const items=grp.items.filter(it=>!q||it.label.toLowerCase().includes(q));
+      if(!items.length)continue; any=true;
+      const gid=key+':'+grp.g, open=q?true:OG.has(gid);
+      h+=`<details class="grp" ${open?'open':''} data-g="${gid}" ontoggle="onGroupToggle(this)"><summary><span>${grp.g}</span><span class="tiny">${items.length}</span></summary><div style="padding:6px 10px 10px">`;
+      for(const it of items)h+=itemBtn(it.id,it.label);
+      h+=`</div></details>`;
+    }
+    if(!any)h+='<div class="tiny" style="padding:8px">該当なし</div>';
+  } else {
+    const items=c.items.filter(it=>!q||it.label.toLowerCase().includes(q));
+    for(const it of items)h+=itemBtn(it.id,it.label);
+    if(!items.length)h+='<div class="tiny" style="padding:8px">該当なし</div>';
+  }
+  openSheet(h);
+  if(c.search){ const el=document.getElementById('catsearch'); if(el){ el.focus(); el.setSelectionRange(el.value.length,el.value.length);} }
+}
+
+// ---------- 患者対応（問診・診察） ----------
+let _ptab="hx";
+function openPatient(){ reopen=()=>{ if(document.getElementById('ov').classList.contains('show'))renderPatient(); }; renderPatient(); }
+function renderPatient(){
+  let h=`<h3>🐾 患者対応<button class="x" onclick="closeSheet()">×</button></h3>
+    <div class="tabs"><div class="tab ${_ptab==='hx'?'on':''}" onclick="_ptab='hx';renderPatient()">問診</div>
+      <div class="tab ${_ptab==='ex'?'on':''}" onclick="_ptab='ex';renderPatient()">身体診察</div></div>`;
+  if(_ptab==='hx'){
+    h+=`<div class="tiny" style="margin-bottom:6px">自由入力で質問（例：いつから尿が出ない？）。拾えない時は下の系統別チップを。</div>
+      <div class="chat" id="chat">${renderChat()}</div>
+      <div class="askrow"><input id="hxin" type="text" placeholder="質問を入力…" onkeydown="if(event.key==='Enter')askFree()"><button class="send" onclick="askFree()">送信</button></div>
+      <div style="height:8px"></div>`;
+    for(const grp of HX_GROUPS){
+      h+=`<details class="grp" open><summary><span>${grp.g}</span></summary><div class="chips">`;
+      for(const it of grp.items){ const done=S.sel.has(it[0]);
+        h+=`<button class="chip ${done?'done':''}" onclick="doAction('${it[0]}')">${done?'✓ ':''}${it[1]}</button>`; }
+      h+=`</div></details>`;
+    }
+  } else {
+    h+=`<div class="tiny" style="margin-bottom:6px">系統を開いて診察。実施済みは緑。所見は経過にも残ります。</div>`;
+    for(const grp of EXAM_GROUPS){
+      h+=`<details class="grp"><summary><span>${grp.g}</span></summary><div class="chips">`;
+      for(const it of grp.items){ const done=S.sel.has(it[0]);
+        h+=`<button class="chip ${done?'done':''}" onclick="doAction('${it[0]}')">${done?'✓ ':''}${it[1]}</button>`; }
+      h+=`</div></details>`;
+    }
+  }
+  openSheet(h);
+  const ch=document.getElementById('chat'); if(ch)ch.scrollTop=ch.scrollHeight;
+}
+function renderChat(){
+  const asked=[...S.sel].filter(id=>id.startsWith("hx_"));
+  if(!asked.length)return '<div class="tiny">まだ質問していません。</div>';
+  return asked.map(id=>`<div class="bub q">${labelOf(id)}</div><div class="bub a">${res(id).text}</div>`).join('');
+}
+function askFree(){
+  const inp=document.getElementById('hxin'); const t=(inp.value||'').trim(); if(!t)return;
+  let hit=null; for(const id in HX_KW){ if(HX_KW[id].some(k=>t.includes(k))){ hit=id; break; } }
+  if(hit){ inp.value=''; doAction(hit); }
+  else { // 拾えない
+    S.log.push({t:S.t,msg:'問診「'+t+'」：飼い主「うーん、よく分かりません…」'});
+    inp.value=''; renderPatient();
+  }
+}
+
+// ---------- 経過ログ ----------
+function openLog(){
+  reopen=()=>{ if(document.getElementById('ov').classList.contains('show'))openLog(); };
+  const body=S.log.slice().reverse().map(e=>`<div class="e"><span class="ts">${fmt(e.t)}</span>${e.warn?'<span class="warnmsg">⚠ </span>':''}${e.msg}</div>`).join('')||'<div class="tiny">記録なし</div>';
+  openSheet(`<h3>📋 経過・所見<button class="x" onclick="closeSheet()">×</button></h3><div class="log">${body}</div>`);
+}
+function log(msg){ S.log.push({t:S.t,msg}); }
+function logWarn(msg){ S.log.push({t:S.t,msg,warn:true}); }
+
+// ---------- モニター波形（ECG/動脈圧/プレチスモ） ----------
+function setupMon(){ const c=document.getElementById('mon'); wf={c,ctx:c.getContext('2d'),x:0,ph:0,buf3:[[],[],[]]};
+  const W=c.width; for(let i=0;i<3;i++)wf.buf3[i]=new Array(W).fill(null); if(wf.raf)cancelAnimationFrame(wf.raf); loopMon(); }
+function loopMon(){
+  const {c,ctx}=wf,W=c.width,H=c.height,laneH=H/3;
+  ctx.fillStyle="#03100a";ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="#0c2a1a";ctx.lineWidth=1; for(let x=0;x<W;x+=18){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  const mon=S&&S.flags.has("monitor")&&S.revealed.has("HR");
+  const hr=(!S||S.arrest)?0:(mon?S.disp.HR:0); const beat=hr>0?Math.max(14,(60/hr)*110):0;
+  for(let s=0;s<4;s++){ wf.x=(wf.x+1)%W; let ph=wf.ph;
+    if(mon&&!S.arrest){ wf.ph+=1/beat; if(wf.ph>=1)wf.ph-=1; ph=wf.ph; }
+    const samp=[
+      mon?(S.arrest?0:ecgSample(ph)) : null,
+      (mon&&!S.arrest)?artSample(ph) : null,
+      (mon&&!S.arrest)?plethSample(ph) : null,
+    ];
+    for(let i=0;i<3;i++){ const base=laneH*(i+0.5); let y=base;
+      if(samp[i]==null)y=base; else y=base - samp[i]*laneH*0.40;
+      wf.buf3[i][wf.x]=y; for(let k=1;k<6;k++)wf.buf3[i][(wf.x+k)%W]=null; }
+  }
+  const colors=[mon?"#37e08a":"#15402b", mon?"#ff6d7a":"#3a1820", mon?"#5fd0ff":"#16344a"];
+  for(let i=0;i<3;i++){ ctx.strokeStyle=colors[i];ctx.lineWidth=2;ctx.beginPath();let st=false;
+    for(let x=0;x<W;x++){ const y=wf.buf3[i][(wf.x+1+x)%W]; if(y==null){st=false;continue;} if(!st){ctx.moveTo(x,y);st=true;}else ctx.lineTo(x,y);} ctx.stroke(); }
+  if(!mon){ ctx.fillStyle="#2a6b4a";ctx.font="12px ui-monospace";ctx.fillText("モニター未装着",W/2-44,H/2);}
+  wf.raf=requestAnimationFrame(loopMon);
+}
+function ecgSample(p){
+  const K=(S&&S.revealed.has("K"))?S.h.K:5;
+  const tAmp=clamp(0.18+(K-5.5)*0.16,0.12,0.9),pW=Math.max(0,(7-K)/3.5);
+  let v=0;v+=pW*0.18*g(p,0.12,0.02);v+=-0.12*g(p,0.27,0.01);v+=1.0*g(p,0.30,0.008);v+=-0.22*g(p,0.33,0.012);
+  v+=tAmp*g(p,0.55,clamp(0.06-(K-5.5)*0.006,0.022,0.06));return v;
+}
+function artSample(p){ // 動脈圧：立ち上がり＋ディクロティックノッチ
+  let v=0.15; v+=0.9*Math.max(0,Math.sin(Math.PI*Math.min(1,p/0.35)))*(p<0.35?1:0);
+  if(p>=0.35)v=0.15+0.55*Math.exp(-(p-0.35)*3.2)+0.12*g(p,0.5,0.03);
+  return v-0.3;
+}
+function plethSample(p){ let v=Math.max(0,Math.sin(Math.PI*Math.min(1,p/0.5)))*0.8+0.08*g(p,0.6,0.05); return v-0.35; }
+function g(x,m,s){const d=x-m;return Math.exp(-(d*d)/(2*s*s));}
+
+// ---------- 診断・方針 ----------
+function openDx(){
+  reopen=()=>{ if(document.getElementById('ov').classList.contains('show'))openDx(); };
+  let h=`<h3>🧠 診断（複数可）<button class="x" onclick="closeSheet()">×</button></h3>`;
+  for(const grp of DIAGNOSES){ h+=`<div class="tiny" style="margin:8px 0 4px">${grp.sys}</div><div class="chips" style="padding:0 0 4px">`;
+    for(const d of grp.list){const s=S.dx.has(d[0]); h+=`<button class="chip ${s?'done':''}" onclick="toggleDx('${d[0]}')">${s?'✓ ':''}${d[1]}</button>`;} h+=`</div>`; }
+  h+='<button class="btn primary" style="margin-top:8px" onclick="closeSheet()">確定</button>'; openSheet(h);
+}
+function toggleDx(id){ S.dx.has(id)?S.dx.delete(id):S.dx.add(id); openDx(); }
+function openDispo(){
+  reopen=()=>{ if(document.getElementById('ov').classList.contains('show'))openDispo(); };
+  let h=`<h3>🏷 方針<button class="x" onclick="closeSheet()">×</button></h3>`;
+  for(const d of DISPOSITIONS){const s=S.dispo===d[0]; h+=`<button class="item ${s?'sel':''}" onclick="setDispo('${d[0]}')"><span class="tick">${s?'✓':'＋'}</span><span>${d[1]}</span></button>`;}
+  h+='<button class="btn primary" style="margin-top:8px" onclick="closeSheet()">確定</button>'; openSheet(h);
+}
+function setDispo(id){ S.dispo=id; openDispo(); }
+
+function openFinal(){
+  reopen=null;
+  openSheet(`<h3>⏹ 最終決定<button class="x" onclick="closeSheet()">×</button></h3>
+    <p class="sub">診断：${[...S.dx].map(dxLabel).join("、")||"（未選択）"}<br>方針：${S.dispo?DISPOSITIONS.find(d=>d[0]===S.dispo)[1]:"（未選択）"}</p>
+    <button class="btn primary" style="margin-bottom:8px" onclick="closeSheet();finalize()">確定して採点</button>
+    <button class="btn ghost" onclick="closeSheet()">戻る</button>`);
+}
+function finalize(){ if(timer)clearInterval(timer); showResult(); }
+
+// ---------- 評価 ----------
+function snapStr(id){ const s=S.snap[id]; if(!s)return''; return `<span class="vsnap">[${fmt(s.t)}] HR${s.HR}/SAP${s.SBP}/SpO₂${s.SpO2}/${s.temp.toFixed(1)}℃</span>`; }
+function showResult(){
+  document.getElementById('sim').classList.add('hide'); closeSheet();
+  const C=S.C; let score=S.score;
+  const crit=[],good=[],harm=[],unnec=[];
+  for(const id in (C.res||{})){ const r=C.res[id],done=S.sel.has(id);
+    if(r.tag==="critical"){ if(done)crit.push({id,ok:true}); else{ crit.push({id,ok:false}); if(typeof r.miss==="number")score+=r.miss; } }
+    else if(r.tag==="good"&&done)good.push(id);
+    else if(r.tag==="harmful"&&done)harm.push({id,v:r.verdict||r.text}); }
+  for(const id of S.sel){ if(!(C.res&&C.res[id])){ const t=actionType(id); if(t==="lab"||t==="drug"||t==="proc")unnec.push(id);} }
+  const dxPrimary=S.dx.has(C.primaryDx),dxHit=[...S.dx].some(d=>C.correctDx.includes(d));
+  const dxWrong=[...S.dx].filter(d=>!C.correctDx.includes(d));
+  score+=(dxPrimary?25:dxHit?15:0)-Math.min(10,dxWrong.length*3);
+  const dispoOK=S.dispo&&C.correctDispo.includes(S.dispo); score+=dispoOK?12:(S.dispo?-6:0);
+  const timeBonus=(!S.dead&&S.t<900)?8:(!S.dead&&S.t<1500)?4:0; score+=timeBonus;
+  if(S.dead)score-=25;
+  const pct=clamp(Math.round(score),0,100);
+  const grade=pct>=85?"S":pct>=70?"A":pct>=55?"B":pct>=40?"C":"D";
+  const gcol=(grade==="S"||grade==="A")?"var(--green)":grade==="B"?"var(--amber)":"var(--red)";
+
+  let missHtml=crit.filter(c=>!c.ok).map(c=>`<div class="e"><span class="rchip bad">未実施</span>${labelOf(c.id)}</div>`).join('');
+  let critOk=crit.filter(c=>c.ok).map(c=>`<div class="e"><span class="rchip ok">○ 適切</span>${labelOf(c.id)} ${snapStr(c.id)}</div>`).join('');
+  let goodHtml=good.map(id=>`<div class="e"><span class="rchip ok">＋</span>${labelOf(id)} ${snapStr(id)}</div>`).join('');
+  let harmHtml=harm.map(h=>`<div class="e"><span class="rchip bad">禁忌/不適切</span>${labelOf(h.id)} ${snapStr(h.id)}<div class="tiny">${h.v}</div></div>`).join('');
+  let unnecHtml=unnec.map(id=>`<div class="e"><span class="rchip neu">−</span>${labelOf(id)}（診断価値が低い） ${snapStr(id)}</div>`).join('')
+    +dxWrong.map(d=>`<div class="e"><span class="rchip neu">−</span>余分な鑑別：${dxLabel(d)}</div>`).join('');
+  const dxLine=`<div class="e"><span class="rchip ${dxPrimary||dxHit?'ok':'bad'}">${dxPrimary||dxHit?'○':'×'} 診断</span>${dxPrimary?'正解：'+dxLabel(C.primaryDx):dxHit?'関連診断は選べた':'主たる正解は「'+dxLabel(C.primaryDx)+'」'}</div>`;
+  const dispoLine=`<div class="e"><span class="rchip ${dispoOK?'ok':'bad'}">${dispoOK?'○':'×'} 方針</span>${dispoOK?DISPOSITIONS.find(d=>d[0]===S.dispo)[1]:'適切な転帰ではない'}</div>`;
+
+  document.getElementById('result').classList.remove('hide');
+  document.getElementById('result').innerHTML=`
+    <div style="text-align:center;margin:6px 0 10px"><div class="pill">結果</div>
+      <div class="scoreBig" style="color:${gcol}">${grade}</div>
+      <div class="sub">スコア ${pct} 点　／　所要 ${fmt(S.t)}${S.dead?'　/　救命できず':S.rosc?'　/　一度心停止':''}</div></div>
+    ${missHtml?`<div class="card"><div class="sub">❗ 必要だったのに行わなかったこと</div><div class="log">${missHtml}</div></div>`:''}
+    <div class="card"><div class="sub">✅ 適切だった行動・診断・方針</div><div class="log">${critOk}${goodHtml}${dxLine}${dispoLine}</div></div>
+    ${harmHtml?`<div class="card"><div class="sub">⛔ 禁忌・不適切だった行動</div><div class="log">${harmHtml}</div></div>`:''}
+    ${unnecHtml?`<div class="card"><div class="sub">▽ 影響の小さかった/不要な行動</div><div class="log">${unnecHtml}</div></div>`:''}
+    <div class="card"><div class="sub">📖 解説</div><p style="margin:6px 0">${C.finalNote}</p>
+      <p class="tiny">※用量・手技・実診療判断は最新のガイドライン／添付文書／施設プロトコルで確認してください。</p></div>
+    <button class="btn primary" onclick="startCase('${S.cid}')">▶ もう一度</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="toStart()">トップへ</button>`;
+  window.scrollTo(0,0);
+}
+function toStart(){ document.getElementById('result').classList.add('hide'); document.getElementById('start').classList.remove('hide'); }
+
+// util
+function openSheet(h){ document.getElementById('sheet').innerHTML=h; document.getElementById('ov').classList.add('show'); }
+function closeSheet(){ document.getElementById('ov').classList.remove('show'); reopen=null; window._csearch=''; }
+document.getElementById('ov').addEventListener('click',e=>{ if(e.target.id==='ov')closeSheet(); });
+function set(id,v){ const e=document.getElementById(id); if(e)e.textContent=v; }
+function clamp(x,a,b){ return Math.max(a,Math.min(b,x)); }
+function fmt(s){ const m=Math.floor(s/60),ss=Math.round(s%60); return String(m).padStart(2,'0')+":"+String(ss).padStart(2,'0'); }
+
+listCases();
+</script>
+</body>
+</html>

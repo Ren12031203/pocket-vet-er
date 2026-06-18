@@ -96,6 +96,7 @@
       <p class="sub">初療室の物をタップして、必要な問診・検査・処置を選ぶ臨床推論シミュレーター。メニューは全症例共通。良し悪しは最終評価で初めて分かります。</p>
     </div>
     <div id="caseList"></div>
+    <button class="btn" style="margin-top:4px;border-color:#6b2330;color:#ff9aa6" onclick="openCPRPractice()">🫀 CPR/ALS 練習モード（CPAから直接開始）</button>
     <p class="tiny" style="margin-top:12px">※教育用。用量・手技・実診療判断は最新の成書／添付文書／施設プロトコル（RECOVER等）で確認してください。投与量計算は扱いません。</p>
   </div>
 
@@ -241,6 +242,73 @@ function defaultResult(id){
   return {text:"実施した。",time:60,s:0};
 }
 
+/* ---------- 全症例共通：薬剤リスクエンジン ----------
+   薬効クラス × 病態（dz/ライブ値）で副作用・禁忌を自動判定。症例側のresに書かない。
+   判定はプレイ中には判定文を出さず（中立維持）、生理影響だけ適用し、最終評価で提示する。 */
+const DRUG_CLASS={
+  d_dexmed:"alpha2",d_medet:"alpha2",
+  d_meloxicam:"nsaid",d_robena:"nsaid",
+  d_furosem:"loop",
+  d_buprenor:"opioid",d_butorph:"opioid",d_methadone:"opioid",d_fentanyl:"opioid",
+  d_acepro:"phenothiazine", d_propofol:"induction", d_kcl:"kcl",
+};
+function drugRisk(id){
+  const cls=DRUG_CLASS[id]; if(!cls)return;
+  const h=S.h, dz=f=>S.dz.has(f), tx=f=>S.flags.has(f);
+  const ev=(score,flag,msg)=>{ if(S.cflags.has(flag))return; S.score+=score; S.cflags.add(flag); S.adverseEvents.push({flag,score,msg,id}); };
+  if(cls==="alpha2"){
+    if(dz("heart_disease")||dz("hcm")||dz("chf_suspected")||dz("chf")) ev(-14,"alpha2_in_heart_disease","心疾患（疑い含む）にα2作動薬。徐脈・後負荷増大・心拍出量低下で悪化しうる。");
+    if(dz("shock")||h.SBP<90) ev(-14,"alpha2_in_shock","ショック/低血圧にα2作動薬。循環虚脱を悪化させうる。");
+    if(dz("hyperkalemia")||(h.K!=null&&h.K>=7)) ev(-12,"alpha2_in_hyperk","高K血症/徐脈傾向にα2作動薬。徐脈・不整脈リスクが高い。");
+    if(dz("respiratory_distress")||h.SpO2<90) ev(-8,"alpha2_in_resp","呼吸困難にα2作動薬。換気・酸素化評価が困難になり急変リスク。");
+    h.HR-=20; h.SBP-=5; S.cflags.add("alpha2_bradycardia");
+  }
+  if(cls==="nsaid"){
+    if(dz("postrenal_aki")||dz("aki")||(h.Cre!=null&&h.Cre>2)) ev(-16,"nsaid_in_aki","AKI/腎後性AKI疑いにNSAID。腎血流低下を助長しうる。");
+    if(dz("shock")||h.SBP<90||dz("hypovolemia")) ev(-12,"nsaid_in_shock","ショック・脱水下のNSAID。腎・消化管障害リスクが高い。");
+  }
+  if(cls==="loop"){
+    if(dz("urinary_obstruction")&&!tx("p_ucath")){ ev(-14,"furosemide_before_relief","尿道閉塞解除前のフロセミド。根本治療にならず脱水・循環不全を悪化させうる。"); h.SBP-=8; }
+    if(dz("shock")||h.SBP<90) ev(-10,"diuretic_in_shock","ショックに利尿薬。循環血液量低下を悪化させうる。");
+  }
+  if(cls==="opioid"){ if(h.RR<8||h.SpO2<85) ev(-8,"opioid_hypovent","低換気/低酸素にオピオイド。呼吸抑制に注意。"); S.cflags.add("recent_opioid"); }
+  if(cls==="phenothiazine"){ if(dz("shock")||h.SBP<90||dz("hypovolemia")) ev(-10,"acepro_in_shock","ショック/低血圧にアセプロマジン。血管拡張で悪化させうる。"); }
+  if(cls==="induction"){ if(h.SpO2<92) { ev(-8,"propofol_apnea","不安定下のプロポフォール。無呼吸・低血圧リスク。"); S.cflags.add("propofol_apnea"); } }
+  if(cls==="kcl"){ if((h.K!=null&&h.K>=5.5)||dz("hyperkalemia")){ ev(-25,"kcl_in_hyperk","高K血症にKClを投与。致死性不整脈・CPAリスクがある。"); if(h.K!=null)h.K+=0.8; S.dz.add("iatrogenic_hyperkalemia"); } }
+}
+
+/* ---------- 画像整合性：症例の truthImg から各モダリティを生成（相互に矛盾させない） ---------- */
+const IMAGING_IDS=["l_thorax","l_abd","l_us","l_fast","l_echo","l_ctmri"];
+const IMG_REGION={l_thorax:"thorax",l_abd:"abdomen",l_us:"abdomen",l_fast:"both",l_echo:"thorax",l_ctmri:"both"};
+function imagingFor(id){
+  const tr=S.C.truthImg; if(!tr)return null;
+  if(id==="l_ctmri"){ return tr.ct||{text:"CT/MRI：明らかな限局性病変は指摘されないが、この症例で高度画像を優先する根拠は乏しい。",s:-6,abn:false,tag:"harmful",verdict:"鎮静/麻酔を要する高度画像より初期安定化・原因治療が優先。"}; }
+  const reg=IMG_REGION[id];
+  if(reg===tr.region||reg==="both") return {text:tr.text||"病変を示唆する所見を認める。",s:1,abn:true};
+  return {text:"該当領域に明らかな異常を認めない。",s:0,abn:false};
+}
+
+/* ---------- グローバルCPAトリガーエンジン ---------- */
+const REVERSIBLE_CAUSES=["hyperkalemia","iatrogenic_hyperkalemia","oxygenation_failure","ventilation_failure","drug_induced","sedation_related_cpa","anesthesia_related_cpa","obstructive_shock","shock_lactic_acidosis"];
+function causeLabel(c){return {hyperkalemia:"高カリウム血症",iatrogenic_hyperkalemia:"医原性高K血症",oxygenation_failure:"低酸素",ventilation_failure:"換気不全/呼吸停止",drug_induced:"薬剤性呼吸抑制(オピオイド)",sedation_related_cpa:"鎮静関連(α2)",anesthesia_related_cpa:"麻酔関連",obstructive_shock:"閉塞性ショック",shock_lactic_acidosis:"ショック/高乳酸",circulatory_collapse:"循環虚脱",malignant_arrhythmia:"致死性不整脈",unknown:"原因不明"}[c]||c;}
+function evaluateCPA(){
+  if(S.arrest||S.dead||S.rosc)return;
+  const h=S.h, dz=f=>S.dz.has(f), cf=f=>S.cflags.has(f);
+  let r=null;
+  if(dz("vf")) r={category:"malignant_arrhythmia",rhythm:"vf",preventable:true};
+  else if(dz("asystole")) r={category:"malignant_arrhythmia",rhythm:"asystole",preventable:true};
+  else if(h.K!=null && h.K>=9.5) r={category:cf("kcl_in_hyperk")?"iatrogenic_hyperkalemia":"hyperkalemia",rhythm:"asystole",reversibleCause:"hyperkalemia",iatrogenic:cf("kcl_in_hyperk"),preventable:true};
+  else if(h.SpO2<60) r={category:"oxygenation_failure",rhythm:"pea",reversibleCause:"hypoxia",preventable:true};
+  else if(cf("alpha2_bradycardia")&&h.HR<40&&h.SBP<60) r={category:"sedation_related_cpa",rhythm:"pea",reversibleCause:"alpha2",iatrogenic:true,preventable:true};
+  else if(cf("opioid_hypovent")&&h.RR<5&&h.SpO2<85) r={category:"drug_induced",rhythm:"pea",reversibleCause:"opioid",iatrogenic:true,preventable:true};
+  else if(cf("propofol_apnea")&&h.SpO2<75) r={category:"anesthesia_related_cpa",rhythm:"pea",iatrogenic:true,preventable:true};
+  else if(dz("tension_pneumothorax")&&h.SpO2<75&&h.SBP<70) r={category:"obstructive_shock",rhythm:"pea",reversibleCause:"tension_pneumothorax",preventable:true};
+  else if(dz("cardiac_tamponade")&&h.SBP<60) r={category:"obstructive_shock",rhythm:"pea",reversibleCause:"tamponade",preventable:true};
+  else if(h.SBP<45) r={category:"circulatory_collapse",rhythm:"pea",preventable:true};
+  else if(h.SBP<60 && h.lactate!=null && h.lactate>9) r={category:"shock_lactic_acidosis",rhythm:"pea",reversibleCause:"shock",preventable:true};
+  if(r){ S.arrest=true; S.cpaCtx=r; }
+}
+
 // ---------- 症例定義 ----------
 const CASES = {
   cat_uo:{
@@ -262,8 +330,10 @@ const CASES = {
       S.h.SBP+=(tBP-S.h.SBP)*0.15;
       S.h.SpO2+=((S.flags.has("o2")?99:96)-S.h.SpO2)*0.3;
       S.h.temp+=(((S.flags.has("fluids")||S.flags.has("warm"))?38.2:36.4)-S.h.temp)*0.05;
-      if(S.h.K>=9.6&&!prot)S.arrest=true;
+      // CPA発火はグローバルCPAエンジン（evaluateCPA）で判定
     },
+    dz:["urinary_obstruction","postrenal_aki","hyperkalemia"],
+    dxReq:{comorbid:["dx_hyperk","dx_aki"],wrongIfOnly:["dx_fic"]},
     correctDx:["dx_uo","dx_hyperk","dx_aki"], primaryDx:"dx_uo", correctDispo:["do_admit","do_icu"],
     res:{
       hx_cc:{text:"排尿しようとしても出ない。今朝からぐったりして、下腹部を痛がる。",s:2,time:30},
@@ -302,17 +372,12 @@ const CASES = {
       d_fentanyl:{text:"フェンタニルで鎮痛した（呼吸循環モニタ必要）。",s:3,time:60,tag:"good"},
       p_cysto:{text:"膀胱穿刺で一時的に減圧。腹痛と膀胱緊満が軽減。",s:6,time:120,flag:["decompressed"],tag:"good",need:[{f:["bladder_known"],pen:-4,msg:"膀胱緊満を確認せずに穿刺した。"}]},
       p_ucath:{text:"尿道カテーテルを設置し閉塞を解除。血尿混じりの尿が流出。閉塞後利尿が始まる。",s:10,time:180,flag:["relieved"],tag:"critical",miss:-30,need:[{f:["iv"],pen:-8,msg:"静脈路確保前に鎮静・処置へ進んだ。"},{f:["ca_protect"],pen:-10,msg:"重度高Kが疑われる状況で心筋保護前に処置へ進んだ。"}]},
-      d_furosem:{text:"フロセミドを投与した。",s:0,time:60,tag:"harmful",verdict:"閉塞解除前の利尿薬は無効で、脱水・循環不全を悪化させる。",contra:[{f:["relieved"],invert:true,pen:-12,msg:""}],fx:S=>{if(!S.flags.has("p_ucath"))S.h.SBP-=8;}},
-      d_meloxicam:{text:"メロキシカムを投与した。",s:-14,time:60,flag:["nsaid"],tag:"harmful",verdict:"腎後性AKI・循環不全が疑われる状況でNSAIDは腎血流を悪化させ不適切。"},
-      d_robena:{text:"ロベナコキシブを投与した。",s:-14,time:60,flag:["nsaid"],tag:"harmful",verdict:"AKI疑い下のNSAIDは避けるべき。"},
-      d_dexmed:{text:"デクスメデトミジンを投与した。",s:-12,time:60,tag:"harmful",verdict:"徐脈・高K・循環不全が疑われる状態でのα2作動薬は危険。",fx:S=>{S.h.HR-=12;}},
-      d_medet:{text:"メデトミジンを投与した。",s:-12,time:60,tag:"harmful",verdict:"徐脈・高K・循環不全が疑われる状態でのα2作動薬は危険。",fx:S=>{S.h.HR-=12;}},
-      d_acepro:{text:"アセプロマジンを投与した。",s:-8,time:60,tag:"harmful",verdict:"血管拡張で低血圧を助長し不適切。"},
       d_atropine:{text:"アトロピンを投与した。",s:-4,time:60,tag:"harmful",verdict:"高K血症性徐脈にアトロピンは根本治療ではない。心筋保護とK低下を優先。"},
-      d_kcl:{text:"塩化カリウムを投与した。",s:-16,time:60,tag:"harmful",verdict:"高K血症の患者にKClは禁忌。",fx:S=>{S.h.K+=0.6;}},
+      /* α2作動薬・NSAID・フロセミド・KCl は全症例共通の薬剤リスクエンジンが判定 */
       p_surgery:{text:"緊急開腹を選択した。",s:-10,time:600,tag:"harmful",verdict:"通常の尿道閉塞初期対応として過剰。まず安定化とカテーテル解除を。"},
-      l_ctmri:{text:"CT/MRIを実施した。",s:-10,time:600,tag:"harmful",verdict:"鎮静/麻酔を要する高度画像より初期安定化と閉塞解除が優先。"},
     },
+    truthImg:{region:"abdomen", text:"膀胱の著明な拡大を認める。",
+      ct:{text:"CT：膀胱の著明な拡張と尿道内栓子を確認。超音波・X線所見と整合する。",s:-10,time:600,abn:true,tag:"harmful",verdict:"所見は得られるが、高K血症を伴う不安定例で鎮静/麻酔を要するCTを優先するのは不適切。初期安定化と閉塞解除を。"}},
     recheckBonus:{l_lyte:6,l_k:6,l_gas:6,l_chem:5},
     finalNote:"硬く緊満した膀胱・無尿・沈鬱・徐脈傾向から尿道閉塞＋腎後性AKI＋高K血症を最優先に。ECGとKで重症度を評価し、静脈路→輸液→グルコン酸Caで心筋保護（Ca自体はKを下げない）→必要に応じK低下治療→膀胱穿刺で一時減圧→尿道カテーテルで根本解除。解除後はK・腎数値・再閉塞を入院下でモニタ。",
   },
@@ -332,8 +397,8 @@ const CASES = {
       S.h.lactate=clamp(S.h.lactate,1,12);
       S.h.SpO2+=((S.flags.has("o2")?98:95)-S.h.SpO2)*0.3;
       S.h.RR+=(((decomp?30:48))-S.h.RR)*0.1;
-      if(S.h.SBP<60&&S.h.lactate>9)S.arrest=true;
     },
+    dz:["gdv","shock","hypovolemia"],
     correctDx:["dx_gdv"], primaryDx:"dx_gdv", correctDispo:["do_surgery","do_icu"],
     res:{
       hx_cc:{text:"夕食後に腹が膨れ、吐こうとするが出ない。落ち着かない。",s:2,time:30},
@@ -360,11 +425,10 @@ const CASES = {
       p_gastrocen:{text:"経皮で胃を穿刺・減圧。ガスが抜け腹圧が低下。",s:6,time:120,flag:["decomp"],tag:"good"},
       p_ogtube:{text:"胃管で減圧を試みた（捻転では通過困難なことあり）。",s:5,time:120,flag:["decomp"],tag:"good"},
       p_surgery:{text:"開腹し整復・胃固定を行った。",s:10,time:600,tag:"critical",miss:-20},
-      d_acepro:{text:"アセプロマジンを投与した。",s:-10,time:60,tag:"harmful",verdict:"ショックの犬に血管拡張薬は低血圧を増悪させ危険。"},
-      d_meloxicam:{text:"メロキシカムを投与した。",s:-9,time:60,tag:"harmful",verdict:"ショック・脱水下のNSAIDは腎・消化管障害を助長。"},
-      d_robena:{text:"ロベナコキシブを投与した。",s:-9,time:60,tag:"harmful",verdict:"ショック下のNSAIDは不適切。"},
-      d_dexmed:{text:"デクスメデトミジンを投与した。",s:-8,time:60,tag:"harmful",verdict:"循環不安定下の強い鎮静は危険。"},
+      /* α2作動薬・NSAID・アセプロマジン等は全症例共通の薬剤リスクエンジンが判定 */
     },
+    truthImg:{region:"abdomen", text:"胃の著明な拡張を認める。",
+      ct:{text:"CT：胃の著明な拡張と捻転を明瞭に確認。腹部X線所見と整合する。",s:-10,time:600,abn:true,tag:"harmful",verdict:"所見は得られるが、緊急減圧・開腹を要する不安定例でCTを優先するのは不適切。"}},
     finalNote:"大型犬の急性腹部膨満＋非生産的嘔吐＋ショックはGDVを最優先。右側臥位X線で胃の区画化を確認。①太い静脈路＋ショックボーラス、②胃の減圧、③鎮痛、④速やかな開腹整復・胃固定。NSAIDや強い鎮静はショックを悪化させ危険。",
   },
   cat_resp:{
@@ -377,8 +441,8 @@ const CASES = {
       S.h.SpO2+=(((tapped?97:(S.flags.has("o2")?(92-stress*4):(86-stress*5))))-S.h.SpO2)*0.3;
       S.h.RR+=(((tapped?34:((S.flags.has("o2")?56:70)+stress*8)))-S.h.RR)*0.25;
       S.h.HR+=(((tapped?170:200))-S.h.HR)*0.1;
-      if(S.h.SpO2<70)S.arrest=true;
     },
+    dz:["pleural_effusion","respiratory_distress","chf_suspected"],
     correctDx:["dx_pleural","dx_chf"], primaryDx:"dx_pleural", correctDispo:["do_admit","do_icu"],
     res:{
       hx_cc:{text:"昨夜から呼吸が速く、今朝は口を開けて苦しそう。伏せたまま動かない。",s:2,time:30},
@@ -401,8 +465,10 @@ const CASES = {
       bigbolus:{text:"大量急速輸液を実施した。",s:-12,time:30,tag:"harmful",verdict:"呼吸不安定な猫への大量輸液は禁物。"},
       fluids:{text:"輸液を開始した。",s:-4,time:30,tag:"harmful",verdict:"呼吸不安定な猫への積極的輸液は慎重に。"},
       ex_abd:{text:"腹部触診のため保定した。呼吸状態が悪化した。",s:-4,time:60,tag:"harmful",verdict:"呼吸不安定時の強い保定はストレスで急変を招く。",fx:S=>{S.stress=(S.stress||0)+1;}},
-      d_dexmed:{text:"デクスメデトミジンを投与した。",s:-5,time:60,tag:"harmful",verdict:"呼吸抑制のリスク。"},
+      /* α2作動薬などは全症例共通の薬剤リスクエンジンが判定 */
     },
+    truthImg:{region:"thorax", text:"胸腔内に液体貯留を示唆する所見。",
+      ct:{text:"CT：両側胸水を明瞭に確認。X線・FAST所見と整合する。",s:-8,time:600,abn:true,tag:"harmful",verdict:"所見は得られるが、呼吸不安定な猫で鎮静/麻酔を要するCTを優先するのは不適切。まず酸素化と胸腔穿刺を。"}},
     finalNote:"開口・起座呼吸の猫はまず酸素と最小ハンドリングが命綱。保定やX線はストレスで急変しうる。TFAST/胸腔穿刺で胸水を確認・排液（診断的かつ治療的）。心原性が疑われればフロセミド。呼吸不安定な猫への積極的輸液は禁物。",
   },
 };
@@ -426,6 +492,7 @@ function startCase(cid){
      disp:{HR:NaN,SBP:NaN,SpO2:NaN,RR:NaN},
      flags:new Set(),cflags:new Set(),revealed:new Set(),
      sel:new Set(),scored:new Set(),dx:new Set(),dispo:null,snap:{},results:[],
+     dz:new Set(C.dz||[]),adverseEvents:[],cpaCtx:null,
      caT:0,stress:0,arrest:false,dead:false,rosc:false,cpr:null,score:0,log:[]};
   arrestShown=false; reopen=null;
   preApply('monitor'); preApply('ivc');   // モニター・静脈路は最初から装着済み
@@ -439,6 +506,7 @@ function tick(){
   S.C.physiology(S);
   if(S.flags.has("monitor")){ for(const k of ["HR","SBP","SpO2","RR"]){ if(!S.revealed.has(k))continue;
     if(isNaN(S.disp[k]))S.disp[k]=S.h[k]; S.disp[k]+=(S.h[k]-S.disp[k])*0.5; } }
+  evaluateCPA();
   if(S.arrest&&!S.rosc&&!S.dead&&!S.cpr)enterCPR();
   render();
 }
@@ -461,6 +529,12 @@ function tryResus(){
 
 // ---------- アクション ----------
 function res(id){ return (S.C.res&&S.C.res[id])?S.C.res[id]:defaultResult(id); }
+function resolveResult(id){ // doAction用：症例res→画像truth→薬剤(中立)→default
+  if(S.C.res&&S.C.res[id])return S.C.res[id];
+  if(actionType(id)==="lab"&&IMAGING_IDS.includes(id)){ const im=imagingFor(id); if(im)return im; }
+  if(actionType(id)==="drug"&&DRUG_CLASS[id])return {text:"投与した。",time:60,s:0}; // 副作用は薬剤リスクエンジンで処理
+  return defaultResult(id);
+}
 function preApply(id){ // 初期装着（時間を消費せず実施済みにする）
   const r=res(id); S.sel.add(id);S.flags.add(id);S.scored.add(id);
   if(r.reveal)r.reveal.forEach(k=>S.revealed.add(k));
@@ -473,10 +547,11 @@ function doAction(id){
   if(S.dead)return;
   const C=S.C, isLab=actionType(id)==="lab", first=!S.scored.has(id);
   if(!first&&!isLab){ return; }
-  const r=res(id);
+  const r=resolveResult(id);
   S.sel.add(id); S.flags.add(id); S.t+=(r.time||60);
   if(r.reveal)r.reveal.forEach(k=>S.revealed.add(k));
   if(first){
+    if(actionType(id)==="drug")drugRisk(id); // 全症例共通の薬剤リスク判定（生理影響を先に反映）
     if(typeof r.fx==="function")r.fx(S);
     if(r.flag)r.flag.forEach(f=>S.cflags.add(f));
     if(typeof r.s==="number")S.score+=r.s;
@@ -490,7 +565,7 @@ function doAction(id){
   }
   const rtext=`${r.text}${(!first&&isLab)?'（再評価）':''}`;
   const _ty=actionType(id);
-  const abn=['hx','exam','lab'].includes(_ty)&&S.C.res&&S.C.res[id]&&!S.C.res[id].norm;
+  const abn=['hx','exam','lab'].includes(_ty)&&((S.C.res&&S.C.res[id]&&!S.C.res[id].norm)||r.abn===true);
   S.results.unshift({id,t:S.t,text:rtext,type:_ty,abn});
   log(`${labelOf(id)}：${rtext}`);
   if(id==="monitor"){ for(const k of ["HR","SBP","SpO2","RR"]) if(S.revealed.has(k))S.disp[k]=S.h[k]; }
@@ -564,8 +639,16 @@ function render(){
     document.getElementById('nBP').innerHTML=sb+"/"+db;} else set('nBP',"–");
   set('nSpO2',S.arrest?"–":show("SpO2")?Math.round(S.disp.SpO2):"–");
   set('nRR',S.arrest?"0":show("RR")?Math.round(S.disp.RR):"–");
+  // peri-arrest 警告（CPA前段階）
+  const warn=[];
+  if(show("SpO2")&&S.disp.SpO2<80)warn.push("重度低酸素");
+  if(show("SBP")&&S.disp.SBP<70)warn.push("重度低血圧");
+  if(S.revealed.has("K")&&S.h.K>=8)warn.push("重度高K血症");
+  if(show("RR")&&S.disp.RR<6)warn.push("低換気");
+  if(S.cflags.has("alpha2_bradycardia")&&show("HR")&&S.disp.HR<50)warn.push("α2関連徐脈");
   // status bar
   const sb=[];
+  if(warn.length)sb.push('<span style="color:#ff9aa6;font-weight:700">⚠ '+warn.join("・")+"（CPA前段階・介入を）</span>");
   sb.push("🫁 酸素:<b>"+(S.flags.has("o2")?"あり":"なし")+"</b>");
   sb.push("💧 輸液:<b>"+((S.flags.has("fluids")||S.flags.has("bolus")||S.flags.has("bigbolus"))?"あり":"なし")+"</b>");
   sb.push("🩺 静脈路:<b>"+(S.flags.has("ivc")?"確保":"なし")+"</b>");
@@ -621,7 +704,8 @@ function renderCat(key){
   }
   h+=resultsHTML([{lab:'lab',drug:'drug',proc:'proc',stab:'stab'}[key]]);
   openSheet(h);
-  if(c.search){ const el=document.getElementById('catsearch'); if(el){ el.focus(); el.setSelectionRange(el.value.length,el.value.length);} }
+  // 検索中（文字が入っている時）だけフォーカスを保持。開いた直後や項目選択後はキーボードを出さない
+  if(c.search && (window._csearch||'').length>0){ const el=document.getElementById('catsearch'); if(el){ el.focus(); el.setSelectionRange(el.value.length,el.value.length);} }
 }
 
 // ---------- 患者対応（問診・診察） ----------
@@ -759,7 +843,10 @@ function showResult(){
   for(const id of S.sel){ if(!(C.res&&C.res[id])){ const t=actionType(id); if(t==="lab"||t==="drug"||t==="proc")unnec.push(id);} }
   const dxPrimary=S.dx.has(C.primaryDx),dxHit=[...S.dx].some(d=>C.correctDx.includes(d));
   const dxWrong=[...S.dx].filter(d=>!C.correctDx.includes(d));
-  score+=(dxPrimary?25:dxHit?15:0)-Math.min(10,dxWrong.length*3);
+  const dr=C.dxReq||{};
+  const comorbidHit=(dr.comorbid||[]).filter(d=>S.dx.has(d)).length;
+  const onlyWrong = !dxPrimary && (dr.wrongIfOnly||[]).some(d=>S.dx.has(d));
+  score+=(dxPrimary?25:dxHit?15:0)-Math.min(10,dxWrong.length*3)+comorbidHit*4-(onlyWrong?8:0);
   const dispoOK=S.dispo&&C.correctDispo.includes(S.dispo); score+=dispoOK?12:(S.dispo?-6:0);
   const timeBonus=(!S.dead&&S.t<900)?8:(!S.dead&&S.t<1500)?4:0; score+=timeBonus;
   if(S.dead)score-=25;
@@ -773,8 +860,9 @@ function showResult(){
   let harmHtml=harm.map(h=>`<div class="e"><span class="rchip bad">禁忌/不適切</span>${labelOf(h.id)} ${snapStr(h.id)}<div class="tiny">${h.v}</div></div>`).join('');
   let unnecHtml=unnec.map(id=>`<div class="e"><span class="rchip neu">−</span>${labelOf(id)}（診断価値が低い） ${snapStr(id)}</div>`).join('')
     +dxWrong.map(d=>`<div class="e"><span class="rchip neu">−</span>余分な鑑別：${dxLabel(d)}</div>`).join('');
-  const dxLine=`<div class="e"><span class="rchip ${dxPrimary||dxHit?'ok':'bad'}">${dxPrimary||dxHit?'○':'×'} 診断</span>${dxPrimary?'正解：'+dxLabel(C.primaryDx):dxHit?'関連診断は選べた':'主たる正解は「'+dxLabel(C.primaryDx)+'」'}</div>`;
+  const dxLine=`<div class="e"><span class="rchip ${dxPrimary||dxHit?'ok':'bad'}">${dxPrimary||dxHit?'○':'×'} 診断</span>${dxPrimary?'正解：'+dxLabel(C.primaryDx):dxHit?'関連診断は選べた':'主たる正解は「'+dxLabel(C.primaryDx)+'」'}${dr.comorbid?`<div class="tiny">併存病態の認識：${comorbidHit}/${dr.comorbid.length}${onlyWrong?'　／ 非閉塞性のみと判断するのは危険':''}</div>`:''}</div>`;
   const dispoLine=`<div class="e"><span class="rchip ${dispoOK?'ok':'bad'}">${dispoOK?'○':'×'} 方針</span>${dispoOK?DISPOSITIONS.find(d=>d[0]===S.dispo)[1]:'適切な転帰ではない'}</div>`;
+  let advHtml=S.adverseEvents.length?S.adverseEvents.map(a=>`<div class="e"><span class="rchip bad">${a.score}</span>${labelOf(a.id)}：${a.msg}</div>`).join(''):'';
 
   document.getElementById('result').classList.remove('hide');
   document.getElementById('result').innerHTML=`
@@ -784,6 +872,7 @@ function showResult(){
     ${missHtml?`<div class="card"><div class="sub">❗ 必要だったのに行わなかったこと</div><div class="log">${missHtml}</div></div>`:''}
     <div class="card"><div class="sub">✅ 適切だった行動・診断・方針</div><div class="log">${critOk}${goodHtml}${dxLine}${dispoLine}</div></div>
     ${harmHtml?`<div class="card"><div class="sub">⛔ 禁忌・不適切だった行動</div><div class="log">${harmHtml}</div></div>`:''}
+    ${advHtml?`<div class="card"><div class="sub">💊 薬剤副作用・医原性（減点）</div><div class="log">${advHtml}</div></div>`:''}
     ${unnecHtml?`<div class="card"><div class="sub">▽ 影響の小さかった/不要な行動</div><div class="log">${unnecHtml}</div></div>`:''}
     <div class="card"><div class="sub">📖 解説</div><p style="margin:6px 0">${C.finalNote}</p>
       <p class="tiny">※用量・手技・実診療判断は最新のガイドライン／添付文書／施設プロトコルで確認してください。</p></div>
@@ -791,7 +880,7 @@ function showResult(){
     <button class="btn ghost" style="margin-top:8px" onclick="toStart()">トップへ</button>`;
   window.scrollTo(0,0);
 }
-function toStart(){ document.getElementById('result').classList.add('hide'); document.getElementById('start').classList.remove('hide'); }
+function toStart(){ if(cprRaf){cancelAnimationFrame(cprRaf);cprRaf=null;} document.getElementById('result').classList.add('hide'); document.getElementById('cpr').classList.add('hide'); document.getElementById('sim').classList.add('hide'); document.getElementById('start').classList.remove('hide'); }
 
 // util
 function openSheet(h){ document.getElementById('sheet').innerHTML=h; document.getElementById('ov').classList.add('show'); }
@@ -842,21 +931,50 @@ function isShock(r){return r==="vf"||r==="pvt";}
 
 let cprRaf=null;
 function enterCPR(){
-  const m=CPR_CASE[S.cid]||{species:(S.C.patient||"dog"),weightKg:10,chest:"cat_or_small_dog",cause:"unknown",rhythm:"pea"};
+  const m=CPR_CASE[S.cid]||{species:(S.C.patient||"dog"),weightKg:10,chest:"cat_or_small_dog",cause:(S.cpaCtx&&S.cpaCtx.category)||"unknown",rhythm:(S.cpaCtx&&S.cpaCtx.rhythm)||"pea"};
+  if(S.cpaCtx){ m.cause=S.cpaCtx.category; m.rhythm=S.cpaCtx.rhythm; m.iatrogenic=S.cpaCtx.iatrogenic; m.reversibleCause=S.cpaCtx.reversibleCause; }
+  enterCPRWith(m);
+}
+function inferChest(species,kg){ if(species==="cat"||kg<12)return "cat_or_small_dog"; return "medium_large_keel_chested"; }
+function enterCPRWith(m){
   S.cpr={ status:"cpa_suspected", m, totalSec:0, cycleSec:0, cycle:0,
     rhythm:"unknown", trueRhythm:m.rhythm, access:"none",
     q:{compStarted:false,rate:0,depth:"too_shallow",recoil:false,duty:false,handsOff:0,fatigue:0,techniqueOK:false,
        ventStarted:false,intubated:false,ventRate:0,chestRise:false,overVent:false},
     mon:{ecg:false,etco2:false,etco2v:null,art:false,dbp:null,lytes:false,K:null},
     drugs:[], defibs:[], flags:new Set(), score:0, log:[], roscProb:0, lastEpiSec:-999 };
-  if(S.cid==="cat_uo")S.cpr.mon.K=(S.h.K||8.5); // 原因がhyperKなら電解質に反映
-  cprLog("CPAが疑われる。応援要請・反応確認・呼吸確認・BLS開始を行う。");
+  if(m.cause==="hyperkalemia"||m.cause==="iatrogenic_hyperkalemia")S.cpr.mon.K=((S.h&&S.h.K)||8.8);
+  cprLog("CPAが疑われる。応援要請・反応確認・呼吸確認・BLS開始を行う。"+(m.iatrogenic?"（医原性の可能性）":""));
   if(timer){clearInterval(timer);timer=null;}
   closeSheet();
   document.getElementById('sim').classList.add('hide');
+  document.getElementById('start').classList.add('hide');
+  document.getElementById('result').classList.add('hide');
   document.getElementById('cpr').classList.remove('hide');
   if(cprRaf)cancelAnimationFrame(cprRaf); cprLoop();
   renderCPR();
+}
+// ---- CPR練習モード（CPAから直接開始）----
+const CPR_PRESETS=[
+  ["🐱 猫 4kg・高カリウム血症（PEA/asystole）","cat",4,"hyperkalemia","asystole"],
+  ["🐕 犬 30kg・低酸素（PEA）","dog",30,"oxygenation_failure","pea"],
+  ["🐕 犬 30kg・出血性ショック（PEA）","dog",30,"shock_lactic_acidosis","pea"],
+  ["🐕 犬 30kg・心室細動 VF（除細動練習）","dog",30,"malignant_arrhythmia","vf"],
+  ["🐱 猫 4kg・心室細動 VF（除細動練習）","cat",4,"malignant_arrhythmia","vf"],
+  ["🐕 犬 8kg・麻酔/鎮静関連（PEA）","dog",8,"sedation_related_cpa","pea"],
+];
+function openCPRPractice(){
+  let h=`<h3>🫀 CPR練習モード<button class="x" onclick="closeSheet()">×</button></h3>
+    <p class="tiny">CPAから直接スタート（RECOVER 2024）。患者と原因・初期リズムを選んでください。VFを選ぶと除細動の練習ができます。</p>`;
+  CPR_PRESETS.forEach((p,i)=>h+=`<button class="item" onclick="startCPRPractice(${i})"><span class="tick">▶</span><span>${p[0]}</span></button>`);
+  openSheet(h);
+}
+function startCPRPractice(i){ const p=CPR_PRESETS[i];
+  S={cid:'practice',C:{patient:p[1],finalNote:''},h:{K:p[3]==="hyperkalemia"?8.8:4.2,HR:0,SBP:0,SpO2:0,RR:0,temp:37},
+     flags:new Set(),cflags:new Set(),revealed:new Set(),sel:new Set(),scored:new Set(),dx:new Set(),dispo:null,snap:{},results:[],
+     dz:new Set(),adverseEvents:[],caT:0,stress:0,arrest:true,dead:false,rosc:false,cpr:null,score:0,log:[]};
+  closeSheet();
+  enterCPRWith({species:p[1],weightKg:p[2],chest:inferChest(p[1],p[2]),cause:p[3],rhythm:p[4]});
 }
 function cprLog(m){ S.cpr.log.push({t:S.cpr.totalSec,m}); }
 function inPause(){ return S.cpr.status==="cycle_pause"; }
@@ -955,10 +1073,25 @@ function cprDrug(id){ const c=S.cpr; const d=CPR_DRUGS.find(x=>x.id===id); if(!d
   else if(id==="bicarb"){ if(c.m.cause==="hyperkalemia"){c.score+=8;c.roscProb+=4;cprLog("可逆的原因（高K血症）に重炭酸。");} else cprLog("重炭酸を投与した。"); }
   closeSheet(); cprEtco2(); renderCPR(); }
 
-function cprLytes(){ const c=S.cpr; c.mon.lytes=true; if(c.mon.K==null)c.mon.K=(c.m.cause==="hyperkalemia"?8.5:4.2);
+function cprLytes(){ const c=S.cpr; c.mon.lytes=true; if(c.mon.K==null)c.mon.K=((c.m.cause==="hyperkalemia"||c.m.cause==="iatrogenic_hyperkalemia")?8.5:4.2);
   c.score+=6; cprLog(`CPA中の電解質を確認。K=${c.mon.K.toFixed?c.mon.K.toFixed(1):c.mon.K} mEq/L。`);
   if(c.mon.K>6.5){c.flags.add("hyperK");cprLog("重度高K血症。可逆的原因として補正を検討（Ca/ブドウ糖+インスリン/重炭酸）。");}
   renderCPR(); }
+// 可逆的原因の治療（CPA原因に応じて表示・ROSC確率に反映）
+function causeTreatments(cause){
+  if(cause==="hyperkalemia"||cause==="iatrogenic_hyperkalemia")return [["ca","グルコン酸カルシウム（心筋保護）"],["ins","ブドウ糖＋インスリン（K低下）"],["src","原因治療（閉塞解除/減圧）"]];
+  if(cause==="oxygenation_failure")return [["o2","酸素化・気道確保"],["thoraco","胸腔穿刺/肺病変への介入"]];
+  if(cause==="ventilation_failure")return [["intubate","挿管・確実な換気"]];
+  if(cause==="drug_induced")return [["naloxone","ナロキソン（オピオイド拮抗）"]];
+  if(cause==="sedation_related_cpa")return [["atipam","アチパメゾール（α2拮抗）"]];
+  if(cause==="anesthesia_related_cpa")return [["airway","気道確保・循環補助"]];
+  if(cause==="obstructive_shock")return [["thoraco","胸腔穿刺"],["pericardio","心嚢穿刺"]];
+  if(cause==="shock_lactic_acidosis")return [["fluids","輸液/輸血で循環補正"],["decomp","原因の減圧/止血"]];
+  return [];
+}
+function cprCauseRx(id){ const c=S.cpr; if(c.flags.has("ct_"+id))return; c.flags.add("ct_"+id); c.flags.add("cause_addressed");
+  c.roscProb+=8; if(id==="ins"){c.flags.add("k_shift");if(c.mon.K!=null)c.mon.K=Math.max(5.5,c.mon.K-0.8);} if(id==="ca")c.flags.add("myocardium_stabilized");
+  cprLog("可逆的原因（"+causeLabel(c.m.cause)+"）への治療を実施。ETCO₂・ROSCの可能性が上がる。"); cprEtco2(); renderCPR(); }
 
 // --- ETCO2（CPR品質の教育的指標）---
 function cprEtco2(){ const c=S.cpr; if(!c.mon.etco2){return;}
@@ -966,6 +1099,7 @@ function cprEtco2(){ const c=S.cpr; if(!c.mon.etco2){return;}
   if(q.compStarted)e+=5; if(q.rate>=100&&q.rate<=120)e+=3; if(q.depth==="adequate")e+=4;
   if(q.recoil)e+=2; if(q.duty)e+=1; if(q.techniqueOK)e+=3; if(q.ventStarted)e+=2; if(q.overVent)e-=4;
   if(c.access==="iv"||c.access==="io")e+=1;
+  if(c.flags.has("cause_addressed"))e+=5; // 可逆的原因の治療で灌流改善
   c.mon.etco2v=Math.max(4,Math.min(45,e));
   if(c.mon.etco2v>=18)c.flags.add("etco2_target"); }
 
@@ -982,12 +1116,20 @@ function cprNext(){ const c=S.cpr;
   c.cycle+=1; c.cycleSec=0; c.status="bls_active"; c.q.handsOff=0; c.q.fatigue=0;
   if(c.q.depth==="too_shallow"&&c.q.techniqueOK)c.q.depth="adequate";
   renderCPR(); }
-function cprROSC(){ const c=S.cpr; if(!inPause()){cprLog("ROSC判定はpauseで（脈・血圧・ETCO2を確認）。");return;}
+function cprROSC(){ const c=S.cpr; if(!inPause()){cprLog("ROSC判定はpauseで（脈・血圧・ETCO₂を確認）。");return;}
   c.q.handsOff+=3; const e=c.mon.etco2v||0;
-  const circ=c.roscProb>=22; const rise=c.mon.etco2&&e>=18;
-  if(rise&&circ){ c.status="rosc";c.rhythm="rosc";c.score+=40;
-    cprLog("ROSC確認。ETCO2の持続上昇＋動脈拍動/血圧。CPRを終了しPCA管理へ。"); cprDebrief(true); }
-  else{ c.score-=5; cprLog("ROSCの客観的根拠が不十分（ETCO2≥18＋拍動）。圧迫を継続。"); renderCPR(); } }
+  const quality = c.q.compStarted && c.mon.etco2 && e>=18;        // ETCO₂≥18 は「CPR品質」の指標
+  const reversible = REVERSIBLE_CAUSES.includes(c.m.cause);
+  const causeOk = !reversible || c.flags.has("cause_addressed");   // 可逆的原因は治療が前提
+  const rhythmOk = c.rhythm==="organized_with_pulse" || (!isShock(c.trueRhythm) && c.roscProb>=20); // 組織化リズム＋拍動
+  if(quality && causeOk && rhythmOk){ c.status="rosc";c.rhythm="rosc";c.score+=40;
+    cprLog("ROSC確認。ETCO₂の持続上昇＋組織化リズム/動脈拍動、可逆的原因への対処を確認。CPRを終了しPCA管理へ。"); cprDebrief(true); }
+  else{ c.score-=5;
+    const why = !quality?"CPR品質が不十分（ETCO₂≥18を目標に圧迫・換気を最適化）。"
+      : !causeOk?"可逆的原因（"+causeLabel(c.m.cause)+"）への治療がまだ。原因治療が必要。"
+      : isShock(c.trueRhythm)?"ショック適応リズムが持続。除細動で組織化を。"
+      :"循環回復の客観的根拠が不十分。";
+    cprLog("ROSCの根拠が不十分："+why+" 圧迫を継続。"); renderCPR(); } }
 function cprTerminate(){ const c=S.cpr; c.status="terminated"; cprLog("蘇生を中止した。"); cprDebrief(false); }
 
 // --- スコア・デブリーフ ---
@@ -1010,6 +1152,7 @@ function scoreCPR(){ const c=S.cpr; let s=0; const cm=[];
   if(c.drugs.filter(d=>d.id==="atropine").length>1){s-=20;cm.push(["bad","アトロピンを反復投与した。"]);}
   if(c.defibs.length>0&&!isShock(c.trueRhythm)){s-=15;cm.push(["bad","非ショック適応リズムに除細動した。"]);}
   if(isShock(c.trueRhythm)&&c.defibs.length===0&&c.q.compStarted){s-=10;cm.push(["bad","ショック適応リズムに除細動していない。"]);}
+  if(REVERSIBLE_CAUSES.includes(c.m.cause)){ if(c.flags.has("cause_addressed")){s+=10;cm.push(["ok","可逆的原因（"+causeLabel(c.m.cause)+"）への治療を実施した。"]);} else cm.push(["bad","可逆的原因（"+causeLabel(c.m.cause)+"）への治療がない。ROSCに至りにくい。"]); }
   if(c.status==="rosc"){s+=40;cm.push(["ok","ROSCを達成した。"]);}
   s=Math.max(0,s);
   const g= s>=105?"S":s>=85?"A":s>=60?"B":s>=35?"C":"D";
@@ -1024,10 +1167,14 @@ function cprDebrief(rosc){ if(cprRaf){cancelAnimationFrame(cprRaf);cprRaf=null;}
   document.getElementById('cpr').innerHTML=`<div class="pad" style="overflow:auto;height:100dvh">
     <div style="text-align:center;margin:6px 0 10px"><div class="pill">CPR/ALS デブリーフ（RECOVER 2024）</div>
       <div class="scoreBig" style="color:${gcol}">${r.grade}</div>
-      <div class="sub">スコア ${r.score} 点　／　${rosc?"ROSC 達成 🟢":"ROSC 未達"}　／　${S.cpr.cycle+1}サイクル・${fmt(S.cpr.totalSec)}</div></div>
+      <div class="sub">スコア ${r.score} 点　／　${rosc?"ROSC 達成 🟢":"ROSC 未達"}　／　${S.cpr.cycle+1}サイクル・${fmt(S.cpr.totalSec)}</div>
+      <div class="tiny" style="margin-top:3px">CPA原因：${causeLabel(S.cpr.m.cause)}${S.cpr.m.iatrogenic?'（医原性・回避可能だった可能性）':S.cpr.m.preventable!==false?'（予防可能な進行）':''}</div></div>
     <div class="card"><div class="sub">評価（RECOVER 2024 とのズレ）</div><div class="log">${rows}</div></div>
     <div class="card"><div class="sub">記録</div><div class="tiny" style="line-height:1.7">投与薬剤：<br>${drugs}<br><br>除細動：<br>${defs}</div></div>
-    ${rosc?`<button class="btn primary" onclick="cprReturnToCare()">▶ 蘇生後（PCA）管理として診療を続ける</button>
+    ${S.cid==='practice'
+    ? `<button class="btn primary" onclick="openCPRPractice()">▶ もう一度 練習する</button>
+       <button class="btn ghost" style="margin-top:8px" onclick="toStart()">トップへ</button>`
+    : rosc?`<button class="btn primary" onclick="cprReturnToCare()">▶ 蘇生後（PCA）管理として診療を続ける</button>
       <button class="btn ghost" style="margin-top:8px" onclick="finalize()">症例の最終評価へ</button>`
     :`<button class="btn primary" onclick="finalize()">症例の最終評価へ</button>
       <button class="btn ghost" style="margin-top:8px" onclick="enterCPR()">CPRをやり直す</button>`}
@@ -1065,7 +1212,8 @@ function renderCPR(){
     </div>
     <div class="body" style="flex:1;overflow:auto">
       <div class="card" style="text-align:center;border-color:${pause?'#6b561d':'#6b2330'}"><b style="color:${pause?'var(--amber)':'var(--red)'}">${statusTxt}</b>
-        <div class="tiny" style="margin-top:3px">中断 ${Math.round(c.q.handsOff)}秒　/　圧迫 ${c.q.compStarted?(c.q.rate+"/分・"+(c.q.depth==="adequate"?"適深":"浅い")+(c.q.recoil?"・リコイル可":"")):"未開始"}　/　換気 ${c.q.ventStarted?(c.q.intubated?(c.q.ventRate+"回/分(挿管)"):"BMV"):"なし"}</div></div>
+        <div class="tiny" style="margin-top:2px">推定原因：${causeLabel(c.m.cause)}${c.m.iatrogenic?'（医原性）':''}${REVERSIBLE_CAUSES.includes(c.m.cause)?'・可逆的→原因治療を':''}</div>
+        <div class="tiny" style="margin-top:2px">中断 ${Math.round(c.q.handsOff)}秒　/　圧迫 ${c.q.compStarted?(c.q.rate+"/分・"+(c.q.depth==="adequate"?"適深":"浅い")+(c.q.recoil?"・リコイル可":"")):"未開始"}　/　換気 ${c.q.ventStarted?(c.q.intubated?(c.q.ventRate+"回/分(挿管)"):"BMV"):"なし"}</div></div>
 
       <div class="sub" style="margin:4px 2px">① 初期評価</div>
       ${btnG(cb("cprCall('help','応援要請。記録係・タイマーを割り当てる。')","応援要請",c.flags.has('help'))+cb("cprCall('resp','反応・脈・呼吸を10秒以内で確認。CPA確定。')","反応/呼吸確認",c.flags.has('resp'))+cb("cprStartBLS()","BLS開始",c.status!=='cpa_suspected')+cb("cprCall('cause','可逆的原因(Hs&Ts)を検索。')","原因検索",c.flags.has('cause')))}
@@ -1076,7 +1224,10 @@ function renderCPR(){
       <div class="sub" style="margin:4px 2px">③ ALS（pauseで判定・除細動・薬剤）</div>
       ${btnG(cb("cprAttachECG()","ECG装着",c.mon.ecg)+cb("cprAttachEtco2()","ETCO₂装着",c.mon.etco2)+cb("cprIV()","IV確保",c.access==='iv')+cb("cprIO()","IO確保",c.access==='io')+cb("cprAssess()","リズム判定",c.rhythm!=='unknown')+cb("cprDefibModal()","除細動",false)+cb("cprDrugModal()","薬剤投与",false)+cb("cprLytes()","K/Ca確認",c.mon.lytes))}
 
-      <div class="sub" style="margin:4px 2px">④ サイクル / 判定</div>
+      ${causeTreatments(c.m.cause).length?`<div class="sub" style="margin:4px 2px">⑤ 可逆的原因の治療（${causeLabel(c.m.cause)}）</div>`
+        +btnG(causeTreatments(c.m.cause).map(t=>cb("cprCauseRx('"+t[0]+"')",t[1],c.flags.has("ct_"+t[0]))).join('')+(causeTreatments(c.m.cause).length%2?'<div></div>':'')):''}
+
+      <div class="sub" style="margin:4px 2px">⑥ サイクル / 判定</div>
       ${btnG(
         (pause? cb("cprNext()","▶ 次サイクル開始",false)+cb("cprROSC()","ROSC判定（脈確認）",false)
               : cb("cprRunCycle()","▶ 2分間CPRを実施",false)+cb("cprROSC()","ROSC判定",false))

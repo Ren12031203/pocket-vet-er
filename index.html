@@ -129,6 +129,7 @@
   </div>
 
   <div id="result" class="hide pad"></div>
+  <div id="cpr" class="hide"></div>
   <div class="ov" id="ov"><div class="sheet" id="sheet"></div></div>
 </div>
 
@@ -425,7 +426,7 @@ function startCase(cid){
      disp:{HR:NaN,SBP:NaN,SpO2:NaN,RR:NaN},
      flags:new Set(),cflags:new Set(),revealed:new Set(),
      sel:new Set(),scored:new Set(),dx:new Set(),dispo:null,snap:{},results:[],
-     caT:0,stress:0,arrest:false,dead:false,rosc:false,score:0,log:[]};
+     caT:0,stress:0,arrest:false,dead:false,rosc:false,cpr:null,score:0,log:[]};
   arrestShown=false; reopen=null;
   preApply('monitor'); preApply('ivc');   // モニター・静脈路は最初から装着済み
   document.getElementById('ccchip').textContent="主訴：「"+C.open+"」";
@@ -438,7 +439,7 @@ function tick(){
   S.C.physiology(S);
   if(S.flags.has("monitor")){ for(const k of ["HR","SBP","SpO2","RR"]){ if(!S.revealed.has(k))continue;
     if(isNaN(S.disp[k]))S.disp[k]=S.h[k]; S.disp[k]+=(S.h[k]-S.disp[k])*0.5; } }
-  if(S.arrest&&!S.rosc&&!S.dead)onArrest();
+  if(S.arrest&&!S.rosc&&!S.dead&&!S.cpr)enterCPR();
   render();
 }
 function onArrest(){
@@ -799,6 +800,311 @@ document.getElementById('ov').addEventListener('click',e=>{ if(e.target.id==='ov
 function set(id,v){ const e=document.getElementById(id); if(e)e.textContent=v; }
 function clamp(x,a,b){ return Math.max(a,Math.min(b,x)); }
 function fmt(s){ const m=Math.floor(s/60),ss=Math.round(s%60); return String(m).padStart(2,'0')+":"+String(ss).padStart(2,'0'); }
+
+/* =========================================================================
+   CPR / ALS モード（RECOVER 2024 準拠の教育用）
+   CPA発生 → 通常UIロック → BLS/ALS状態機械。2分サイクル、リズム判定、除細動、
+   薬剤、ETCO2、ROSC判定を学習。※用量は体重から表示するが教育用（施設プロトコル確認）。
+   ========================================================================= */
+const CPR_CASE={
+  cat_uo:{species:"cat",weightKg:5.2,chest:"cat_or_small_dog",cause:"hyperkalemia",rhythm:"pea"},
+  dog_gdv:{species:"dog",weightKg:48,chest:"medium_large_keel_chested",cause:"hypovolemia",rhythm:"pea"},
+  cat_resp:{species:"cat",weightKg:4.0,chest:"cat_or_small_dog",cause:"respiratory",rhythm:"asystole"},
+};
+const CHEST_LABEL={cat_or_small_dog:"猫・小型犬",medium_large_keel_chested:"中大型・キール型（胸深い）",medium_large_round_chested:"中大型・樽状胸",wide_chested_dorsal_stable:"幅広胸・背臥位安定"};
+const TECHNIQUES=[
+  ["circumferential_two_thumb","両母指で胸郭を包む（小型）"],
+  ["one_hand_palm","片手・手掌（小型）"],
+  ["over_heart","心臓直上を圧迫（キール型）"],
+  ["widest_chest","胸郭最大幅で圧迫（樽状）"],
+  ["sternal_dorsal","背臥位・胸骨を圧迫（幅広胸）"],
+];
+function techniqueOK(chest,t){
+  if(chest==="cat_or_small_dog")return ["circumferential_two_thumb","one_hand_thumb_to_fingers","one_hand_palm"].includes(t);
+  if(chest==="medium_large_keel_chested")return t==="over_heart";
+  if(chest==="medium_large_round_chested")return t==="widest_chest";
+  if(chest==="wide_chested_dorsal_stable")return t==="sternal_dorsal";
+  return false;
+}
+const CPR_DRUGS=[
+  {id:"epi_std",label:"エピネフリン（標準）",dose:0.01,unit:"mg/kg",routes:["iv","io","it"]},
+  {id:"epi_high",label:"高用量エピネフリン",dose:0.1,unit:"mg/kg",contra:true},
+  {id:"vaso",label:"バソプレシン",dose:0.8,unit:"U/kg"},
+  {id:"atropine",label:"アトロピン",dose:0.04,unit:"mg/kg"},
+  {id:"lidocaine",label:"リドカイン（犬）",dose:2,unit:"mg/kg",species:"dog"},
+  {id:"amiodarone",label:"アミオダロン（猫）",dose:5,unit:"mg/kg",species:"cat"},
+  {id:"esmolol",label:"エスモロール",dose:0.5,unit:"mg/kg"},
+  {id:"naloxone",label:"ナロキソン",dose:0.04,unit:"mg/kg"},
+  {id:"bicarb",label:"重炭酸ナトリウム",dose:1,unit:"mEq/kg"},
+];
+function rhythmName(r){return {unknown:"判定前",asystole:"心静止(asystole)",pea:"無脈性電気活動(PEA)",vf:"心室細動(VF)",pvt:"無脈性VT(PVT)",organized_with_pulse:"組織化リズム",rosc:"自己心拍(ROSC)"}[r]||r;}
+function isShock(r){return r==="vf"||r==="pvt";}
+
+let cprRaf=null;
+function enterCPR(){
+  const m=CPR_CASE[S.cid]||{species:(S.C.patient||"dog"),weightKg:10,chest:"cat_or_small_dog",cause:"unknown",rhythm:"pea"};
+  S.cpr={ status:"cpa_suspected", m, totalSec:0, cycleSec:0, cycle:0,
+    rhythm:"unknown", trueRhythm:m.rhythm, access:"none",
+    q:{compStarted:false,rate:0,depth:"too_shallow",recoil:false,duty:false,handsOff:0,fatigue:0,techniqueOK:false,
+       ventStarted:false,intubated:false,ventRate:0,chestRise:false,overVent:false},
+    mon:{ecg:false,etco2:false,etco2v:null,art:false,dbp:null,lytes:false,K:null},
+    drugs:[], defibs:[], flags:new Set(), score:0, log:[], roscProb:0, lastEpiSec:-999 };
+  if(S.cid==="cat_uo")S.cpr.mon.K=(S.h.K||8.5); // 原因がhyperKなら電解質に反映
+  cprLog("CPAが疑われる。応援要請・反応確認・呼吸確認・BLS開始を行う。");
+  if(timer){clearInterval(timer);timer=null;}
+  closeSheet();
+  document.getElementById('sim').classList.add('hide');
+  document.getElementById('cpr').classList.remove('hide');
+  if(cprRaf)cancelAnimationFrame(cprRaf); cprLoop();
+  renderCPR();
+}
+function cprLog(m){ S.cpr.log.push({t:S.cpr.totalSec,m}); }
+function inPause(){ return S.cpr.status==="cycle_pause"; }
+
+// --- BLS ---
+function cprCall(id,msg){ const c=S.cpr; if(c.flags.has(id))return; c.flags.add(id); c.score+=4; cprLog(msg); renderCPR(); }
+function cprStartBLS(){ const c=S.cpr; if(c.status==="cpa_suspected"){c.status="bls_active";c.score+=6;cprLog("BLSを開始。直ちに胸骨圧迫へ。");} renderCPR(); }
+function cprCompress(){ const c=S.cpr; if(c.q.compStarted)return;
+  c.status="bls_active"; c.q.compStarted=true;c.q.rate=110;c.q.depth="adequate";c.q.recoil=true;c.q.duty=true;
+  c.score+=20;c.roscProb+=10; cprLog("胸骨圧迫を開始。100–120/分・胸郭1/3〜1/2・完全リコイル・50:50を目標。"); cprEtco2(); renderCPR(); }
+function cprTechModal(){ let h=`<h3>圧迫位置（胸郭形態：${CHEST_LABEL[S.cpr.m.chest]}）<button class="x" onclick="closeSheet()">×</button></h3>`;
+  TECHNIQUES.forEach(t=>h+=`<button class="item" onclick="cprTech('${t[0]}')"><span class="tick">＋</span><span>${t[1]}</span></button>`);
+  openSheet(h); }
+function cprTech(t){ const c=S.cpr; const ok=techniqueOK(c.m.chest,t);
+  if(ok){c.score+=10;c.roscProb+=5;c.q.techniqueOK=true;cprLog("胸郭形態に合った圧迫位置を選択。");}
+  else{c.score-=8;c.roscProb-=4;c.q.techniqueOK=false;cprLog("圧迫位置が胸郭形態に不適切。ETCO2/DBPが上がりにくい。");}
+  cprEtco2(); closeSheet(); renderCPR(); }
+function cprIntubate(){ const c=S.cpr; if(!c.q.compStarted){c.score-=10;cprLog("圧迫開始前に挿管を優先した。多人数CPRでは圧迫を遅らせない。");}
+  c.q.intubated=true;c.q.ventStarted=true;c.q.ventRate=10;c.q.chestRise=true;c.score+=10;
+  cprLog("気管挿管し、連続圧迫＋10回/分で換気開始。"); cprEtco2(); renderCPR(); }
+function cprBagMask(){ const c=S.cpr; if(c.q.intubated){cprLog("挿管済み。挿管下換気を継続。");return;}
+  c.q.ventStarted=true;c.q.chestRise=true;c.score+=6; cprLog("密着マスク＋酸素でバッグマスク換気（挿管前は30:2）。"); cprEtco2(); renderCPR(); }
+function cprVentRate(r){ const c=S.cpr; c.q.ventRate=r;
+  if(c.q.intubated){ if(r===10){c.score+=6;cprLog("挿管下10回/分。適切。");}
+    else if(r>20){c.score-=10;c.q.overVent=true;c.roscProb-=5;cprLog("過換気。静脈還流と冠灌流を低下させうる。");}
+    else{c.score-=3;cprLog("換気回数が推奨から外れている。");} }
+  cprEtco2(); closeSheet(); renderCPR(); }
+function cprVentModal(){ let h=`<h3>換気回数（挿管下）<button class="x" onclick="closeSheet()">×</button></h3>`;
+  [6,10,15,25].forEach(r=>h+=`<button class="item" onclick="cprVentRate(${r})"><span class="tick">＋</span><span>${r} 回/分</span></button>`);
+  openSheet(h); }
+
+// --- ALS ---
+function cprAttachECG(){ const c=S.cpr; if(c.mon.ecg)return; c.mon.ecg=true;c.score+=8;cprLog("ECGを装着。次のpauseでリズム判定。");renderCPR(); }
+function cprAttachEtco2(){ const c=S.cpr; if(c.mon.etco2)return; c.mon.etco2=true;c.score+=10;cprLog("ETCO2を装着。CPR品質の指標にする（目標≥18 mmHg）。");cprEtco2();renderCPR(); }
+function cprIV(){ const c=S.cpr; if(c.access==="iv")return; c.access="iv";c.score+=10;cprLog("IVアクセスを確保。CPR薬剤の優先経路。");cprEtco2();renderCPR(); }
+function cprIO(){ const c=S.cpr; if(c.totalSec<120){c.score-=2;cprLog("IVを試す前にIOへ。状況によるが基本はIV優先。");}else{c.score+=8;cprLog("IV困難のためIOを確保。適切。");} c.access="io";cprEtco2();renderCPR(); }
+function cprAssess(){ const c=S.cpr; if(!c.mon.ecg){cprLog("先にECGを装着してください。");return;}
+  if(!inPause()){c.score-=8;cprLog("サイクル中のリズム判定は圧迫中断を招く。pauseで行う。");}
+  else c.q.handsOff+=4;
+  c.rhythm=c.trueRhythm;
+  if(isShock(c.rhythm)){c.flags.add("shockable");cprLog("ショック適応："+rhythmName(c.rhythm)+"。除細動を最優先に。");}
+  else{c.flags.add("nonshockable");cprLog("非ショック適応："+rhythmName(c.rhythm)+"。BLS継続・原因検索・血管確保・エピネフリン。");}
+  renderCPR(); }
+function cprDefib(wave){ const c=S.cpr;
+  if(!isShock(c.rhythm)){c.score-=20;cprLog("非ショック適応リズムに除細動した。不適切。");renderCPR();return;}
+  if(inPause())c.q.handsOff+=4;
+  const prev=c.defibs.length;
+  const j= wave==="biphasic"?(prev===0?2:4):(prev===0?4:8);
+  const chance=prev===0?0.45+c.roscProb/200:0.25+c.roscProb/250;
+  const ok=Math.random()<Math.max(0.05,Math.min(0.8,chance));
+  c.defibs.push({cycle:c.cycle,j,wave,ok});
+  c.score+= prev===0?20:12;
+  cprLog((wave==="biphasic"?"二相性":"単相性")+`除細動 ${j} J/kg（${prev===0?"初回標準":"倍量維持"}）。`);
+  if(ok){c.rhythm="organized_with_pulse";c.roscProb+=10;cprLog("組織化リズムへ変化。ROSC判定が必要。");}
+  else{c.flags.add("refractory");cprLog("ショック適応持続。直ちに圧迫再開し次サイクルへ。");}
+  renderCPR(); }
+function cprDefibModal(){ openSheet(`<h3>除細動<button class="x" onclick="closeSheet()">×</button></h3>
+  <p class="tiny">二相性：初回2 J/kg→以後4 J/kg　単相性：初回4 J/kg→以後8 J/kg（教育用・施設プロトコル確認）</p>
+  <button class="item" onclick="closeSheet();cprDefib('biphasic')"><span class="tick">⚡</span><span>二相性で除細動</span></button>
+  <button class="item" onclick="closeSheet();cprDefib('monophasic')"><span class="tick">⚡</span><span>単相性で除細動</span></button>`); }
+
+function cprDrugModal(){ const c=S.cpr; const w=c.m.weightKg;
+  let h=`<h3>薬剤投与<button class="x" onclick="closeSheet()">×</button></h3>
+    <p class="tiny">体重 ${w} kg・経路 ${c.access==="none"?"未確保":c.access.toUpperCase()}。表示用量は教育用（実診療は施設プロトコル確認）。</p>`;
+  CPR_DRUGS.forEach(d=>{ if(d.species&&d.species!==c.m.species)return;
+    const dose=(d.dose*w); const ds=Number.isInteger(dose)?dose:dose.toFixed(2);
+    h+=`<button class="item" onclick="cprDrug('${d.id}')"><span class="tick">＋</span><span>${d.label}　<span class="tiny">${ds} ${d.unit.replace('/kg','')}</span></span></button>`; });
+  openSheet(h); }
+function cprDrug(id){ const c=S.cpr; const d=CPR_DRUGS.find(x=>x.id===id); if(!d){return;}
+  if(c.access==="none"){c.score-=10;cprLog(`${d.label}を投与しようとしたがIV/IO未確保。`);closeSheet();renderCPR();return;}
+  if(inPause())c.q.handsOff+=3;
+  c.drugs.push({id,route:c.access,cycle:c.cycle,t:c.totalSec});
+  if(id==="epi_high"){c.score-=25;c.roscProb-=10;cprLog("高用量エピネフリン0.1 mg/kgを投与。RECOVER 2024では非推奨。大きく減点。");}
+  else if(id==="epi_std"){
+    if(c.rhythm==="pea"||c.rhythm==="asystole"){ const since=c.totalSec-c.lastEpiSec;
+      if(since<180){c.score-=4;cprLog("前回エピから3分未満での反復。3–5分間隔で。");}
+      else{c.score+=15;c.roscProb+=8;cprLog(`エピネフリン0.01 mg/kgを${c.access.toUpperCase()}投与。非ショック適応で適切。`);}
+      c.lastEpiSec=c.totalSec;
+    } else if(isShock(c.rhythm)){ if(c.defibs.length===0){c.score-=15;cprLog("初回除細動前のVF/PVTにエピ。RECOVER 2024では非推奨。");}
+      else{c.score+=6;c.roscProb+=3;cprLog("難治性VF/PVTへの血管収縮薬としてエピを使用。");c.lastEpiSec=c.totalSec;} }
+    else cprLog("エピネフリンを投与した。");
+  }
+  else if(id==="atropine"){ const n=c.drugs.filter(x=>x.id==="atropine").length;
+    if(n>1){c.score-=15;cprLog("アトロピンを反復投与。RECOVER 2024では反復は非推奨。");}
+    else if(c.rhythm==="pea"||c.rhythm==="asystole"){c.score+=5;cprLog("アトロピンを早期1回。迷走神経性CPA疑いで考慮。");}
+    else{c.score-=4;cprLog("このリズムでのアトロピン適応は乏しい。");} }
+  else if(id==="vaso"){ if(isShock(c.rhythm)&&c.defibs.length>=1){c.score+=8;c.roscProb+=4;cprLog("難治性VF/PVTにバソプレシン。");}
+    else if(isShock(c.rhythm)){c.score-=8;cprLog("初回除細動前のバソプレシン。まず除細動。");}
+    else cprLog("バソプレシンを投与した。"); }
+  else if(id==="lidocaine"){ if(c.m.species!=="dog"){c.score-=10;cprLog("猫にリドカイン。猫の難治性VF/PVTはアミオダロン優先。");}
+    else if(isShock(c.rhythm)){c.score+=8;c.roscProb+=4;cprLog("犬の難治性VF/PVTにリドカイン。");} else cprLog("リドカインを投与した。"); }
+  else if(id==="amiodarone"){ if(c.m.species!=="cat"){c.score-=4;cprLog("犬にアミオダロン。犬はリドカインがより実用的。");}
+    else if(isShock(c.rhythm)){c.score+=8;c.roscProb+=4;cprLog("猫の難治性VF/PVTにアミオダロン。");} else cprLog("アミオダロンを投与した。"); }
+  else if(id==="naloxone"){ if(c.m.cause==="opioid_related"||c.m.cause==="respiratory"){c.score+=4;cprLog("ナロキソンを投与した。");}
+    else{c.score-=2;cprLog("ナロキソンを投与したが、オピオイド関連の根拠は乏しい。");} }
+  else if(id==="bicarb"){ if(c.m.cause==="hyperkalemia"){c.score+=8;c.roscProb+=4;cprLog("可逆的原因（高K血症）に重炭酸。");} else cprLog("重炭酸を投与した。"); }
+  closeSheet(); cprEtco2(); renderCPR(); }
+
+function cprLytes(){ const c=S.cpr; c.mon.lytes=true; if(c.mon.K==null)c.mon.K=(c.m.cause==="hyperkalemia"?8.5:4.2);
+  c.score+=6; cprLog(`CPA中の電解質を確認。K=${c.mon.K.toFixed?c.mon.K.toFixed(1):c.mon.K} mEq/L。`);
+  if(c.mon.K>6.5){c.flags.add("hyperK");cprLog("重度高K血症。可逆的原因として補正を検討（Ca/ブドウ糖+インスリン/重炭酸）。");}
+  renderCPR(); }
+
+// --- ETCO2（CPR品質の教育的指標）---
+function cprEtco2(){ const c=S.cpr; if(!c.mon.etco2){return;}
+  let e=8; const q=c.q;
+  if(q.compStarted)e+=5; if(q.rate>=100&&q.rate<=120)e+=3; if(q.depth==="adequate")e+=4;
+  if(q.recoil)e+=2; if(q.duty)e+=1; if(q.techniqueOK)e+=3; if(q.ventStarted)e+=2; if(q.overVent)e-=4;
+  if(c.access==="iv"||c.access==="io")e+=1;
+  c.mon.etco2v=Math.max(4,Math.min(45,e));
+  if(c.mon.etco2v>=18)c.flags.add("etco2_target"); }
+
+// --- サイクル ---
+function cprRunCycle(){ const c=S.cpr; if(c.status!=="bls_active"){return;}
+  if(!c.q.compStarted){cprLog("胸骨圧迫が未開始。まず圧迫を。");return;}
+  c.totalSec+=120; c.cycleSec=0; c.q.fatigue+=1;
+  if(c.q.fatigue>1){c.q.depth="too_shallow";c.roscProb-=2;cprLog("圧迫者の疲労で深度低下。次サイクルで交代を。");}
+  c.status="cycle_pause"; c.q.handsOff=0; cprEtco2();
+  cprLog("2分サイクル終了。10秒未満でリズム判定・圧迫者交代・必要処置を。"); renderCPR(); }
+function cprNext(){ const c=S.cpr;
+  if(c.q.handsOff>10){c.score-=10;c.roscProb-=5;cprLog("胸骨圧迫中断が10秒超。減点。");}
+  else{c.score+=4;cprLog("10秒未満で次サイクルへ移行。圧迫者交代。");}
+  c.cycle+=1; c.cycleSec=0; c.status="bls_active"; c.q.handsOff=0; c.q.fatigue=0;
+  if(c.q.depth==="too_shallow"&&c.q.techniqueOK)c.q.depth="adequate";
+  renderCPR(); }
+function cprROSC(){ const c=S.cpr; if(!inPause()){cprLog("ROSC判定はpauseで（脈・血圧・ETCO2を確認）。");return;}
+  c.q.handsOff+=3; const e=c.mon.etco2v||0;
+  const circ=c.roscProb>=22; const rise=c.mon.etco2&&e>=18;
+  if(rise&&circ){ c.status="rosc";c.rhythm="rosc";c.score+=40;
+    cprLog("ROSC確認。ETCO2の持続上昇＋動脈拍動/血圧。CPRを終了しPCA管理へ。"); cprDebrief(true); }
+  else{ c.score-=5; cprLog("ROSCの客観的根拠が不十分（ETCO2≥18＋拍動）。圧迫を継続。"); renderCPR(); } }
+function cprTerminate(){ const c=S.cpr; c.status="terminated"; cprLog("蘇生を中止した。"); cprDebrief(false); }
+
+// --- スコア・デブリーフ ---
+function scoreCPR(){ const c=S.cpr; let s=0; const cm=[];
+  const add=(cond,p,okmsg,ngmsg)=>{ if(cond){s+=p;if(okmsg)cm.push(["ok",okmsg]);} else {if(ngmsg)cm.push(["bad",ngmsg]);} };
+  add(c.q.compStarted,25,"胸骨圧迫を開始できた。","胸骨圧迫が開始されていない。"); if(!c.q.compStarted)s-=30;
+  add(c.q.rate>=100&&c.q.rate<=120,8,"圧迫レート100–120/分。","圧迫レートが推奨範囲外。");
+  add(c.q.depth==="adequate",8,"圧迫深度が適切。","圧迫深度が不適切。");
+  add(c.q.recoil,6,"完全な胸郭リコイル。","胸郭リコイルが不十分。");
+  add(c.q.techniqueOK,8,"胸郭形態に合った圧迫位置。","圧迫位置が不適切/未選択。");
+  add(c.q.ventStarted,8,"換気を確立。","換気が確立されていない。");
+  if(c.q.overVent){s-=10;cm.push(["bad","過換気。冠灌流を低下させうる。"]);}
+  add(c.mon.ecg,8,"ECGモニタリング。","ECGモニタリング不足。");
+  add(c.mon.etco2,8,"ETCO₂モニタリング。","ETCO₂モニタリング不足。");
+  if(c.mon.etco2)add((c.mon.etco2v||0)>=18,10,"ETCO₂≥18 mmHg達成。CPR品質良好。","ETCO₂が低い。圧迫位置・深度・リコイル・換気を見直す。");
+  add(c.access!=="none",8,"血管路を確保。","血管路が未確保。");
+  add(c.rhythm!=="unknown",6,"リズムを判定。","リズム判定をしていない。");
+  if(c.mon.lytes&&c.m.cause==="hyperkalemia")cm.push(["ok","CPA中に電解質を評価し可逆的原因を検索。"]);
+  if(c.drugs.some(d=>d.id==="epi_high")){s-=30;cm.push(["bad","高用量エピを使用。RECOVER 2024では非推奨。"]);}
+  if(c.drugs.filter(d=>d.id==="atropine").length>1){s-=20;cm.push(["bad","アトロピンを反復投与した。"]);}
+  if(c.defibs.length>0&&!isShock(c.trueRhythm)){s-=15;cm.push(["bad","非ショック適応リズムに除細動した。"]);}
+  if(isShock(c.trueRhythm)&&c.defibs.length===0&&c.q.compStarted){s-=10;cm.push(["bad","ショック適応リズムに除細動していない。"]);}
+  if(c.status==="rosc"){s+=40;cm.push(["ok","ROSCを達成した。"]);}
+  s=Math.max(0,s);
+  const g= s>=105?"S":s>=85?"A":s>=60?"B":s>=35?"C":"D";
+  return {grade:g,score:s,comments:cm};
+}
+function cprDebrief(rosc){ if(cprRaf){cancelAnimationFrame(cprRaf);cprRaf=null;}
+  const r=scoreCPR(); const pct=Math.max(0,Math.min(150,r.score));
+  const gcol=(r.grade==="S"||r.grade==="A")?"var(--green)":r.grade==="B"?"var(--amber)":"var(--red)";
+  let rows=r.comments.map(c=>`<div class="e"><span class="rchip ${c[0]}">${c[0]==="ok"?"○":"×"}</span>${c[1]}</div>`).join('');
+  let drugs=S.cpr.drugs.length?S.cpr.drugs.map(d=>`${CPR_DRUGS.find(x=>x.id===d.id).label}（${fmt(d.t)}/サイクル${d.cycle+1}/${d.route.toUpperCase()}）`).join('<br>'):"なし";
+  let defs=S.cpr.defibs.length?S.cpr.defibs.map(d=>`${d.j}J/kg ${d.wave==="biphasic"?"二相性":"単相性"} ${d.ok?"→組織化":"→持続"}`).join('<br>'):"なし";
+  document.getElementById('cpr').innerHTML=`<div class="pad" style="overflow:auto;height:100dvh">
+    <div style="text-align:center;margin:6px 0 10px"><div class="pill">CPR/ALS デブリーフ（RECOVER 2024）</div>
+      <div class="scoreBig" style="color:${gcol}">${r.grade}</div>
+      <div class="sub">スコア ${r.score} 点　／　${rosc?"ROSC 達成 🟢":"ROSC 未達"}　／　${S.cpr.cycle+1}サイクル・${fmt(S.cpr.totalSec)}</div></div>
+    <div class="card"><div class="sub">評価（RECOVER 2024 とのズレ）</div><div class="log">${rows}</div></div>
+    <div class="card"><div class="sub">記録</div><div class="tiny" style="line-height:1.7">投与薬剤：<br>${drugs}<br><br>除細動：<br>${defs}</div></div>
+    ${rosc?`<button class="btn primary" onclick="cprReturnToCare()">▶ 蘇生後（PCA）管理として診療を続ける</button>
+      <button class="btn ghost" style="margin-top:8px" onclick="finalize()">症例の最終評価へ</button>`
+    :`<button class="btn primary" onclick="finalize()">症例の最終評価へ</button>
+      <button class="btn ghost" style="margin-top:8px" onclick="enterCPR()">CPRをやり直す</button>`}
+    <p class="tiny" style="margin-top:10px">※教育用シミュレーション。胸骨圧迫の手技・用量・除細動エネルギー・薬剤選択は最新のRECOVERガイドラインと施設プロトコルで確認してください。</p>
+  </div>`;
+}
+function cprReturnToCare(){ // ROSC後、通常診療へ復帰（蘇生後管理）
+  S.arrest=false; S.rosc=true; S.cpr.status="rosc";
+  S.h.HR=120; S.h.SBP=95; S.h.SpO2=95; S.h.RR=24;
+  document.getElementById('cpr').classList.add('hide');
+  document.getElementById('sim').classList.remove('hide');
+  document.getElementById('alarm').textContent="🟢 ROSC";
+  log("ROSC後、蘇生後（PCA）管理として診療を再開。");
+  if(timer)clearInterval(timer); timer=setInterval(tick,1000);
+  render();
+}
+
+// --- CPR画面の描画 ---
+function btnG(html){ return `<div class="card"><div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">${html}</div></div>`; }
+function cb(onclick,label,on){ return `<button class="btn ${on?'':'ghost'}" style="padding:10px 6px;font-size:13px" onclick="${onclick}">${label}</button>`; }
+function renderCPR(){
+  const c=S.cpr; const pause=inPause();
+  const rh = c.rhythm==="unknown"?"— 判定前 —":rhythmName(c.rhythm);
+  const et = c.mon.etco2? (c.mon.etco2v||"–")+" mmHg"+((c.mon.etco2v>=18)?" ✅":"") : "未装着";
+  const statusTxt = c.status==="cpa_suspected"?"CPA疑い：初期評価を":c.status==="bls_active"?`BLS実施中（サイクル${c.cycle+1}）`:c.status==="cycle_pause"?"⏸ PAUSE（10秒以内に判定・処置・交代）":c.status;
+  document.getElementById('cpr').innerHTML=`<div style="display:flex;flex-direction:column;height:100dvh;overflow:hidden">
+    <div class="monitor">
+      <div class="topbar"><span>🔴 CPR/ALS・RECOVER2024　経過 ${fmt(c.totalSec)}</span><span>${c.m.species==="cat"?"🐱":"🐕"} ${c.m.weightKg}kg</span></div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <div class="vit" style="flex:1"><div class="lab">リズム</div><div style="font-weight:800;font-size:15px;color:${isShock(c.rhythm)?'#ff6d7a':'#7ef0c4'}">${rh}</div></div>
+        <div class="vit" style="flex:1"><div class="lab">ETCO₂</div><div style="font-weight:800;font-size:15px;color:#5fd0ff">${et}</div></div>
+        <div class="vit" style="flex:1"><div class="lab">経路 / ECG</div><div style="font-weight:800;font-size:13px">${c.access==="none"?"未確保":c.access.toUpperCase()} / ${c.mon.ecg?"装着":"なし"}</div></div>
+      </div>
+      <canvas id="cprecg" width="600" height="56" style="height:46px;margin-top:6px;background:#03100a;border:1px solid #10341f;border-radius:8px"></canvas>
+    </div>
+    <div class="body" style="flex:1;overflow:auto">
+      <div class="card" style="text-align:center;border-color:${pause?'#6b561d':'#6b2330'}"><b style="color:${pause?'var(--amber)':'var(--red)'}">${statusTxt}</b>
+        <div class="tiny" style="margin-top:3px">中断 ${Math.round(c.q.handsOff)}秒　/　圧迫 ${c.q.compStarted?(c.q.rate+"/分・"+(c.q.depth==="adequate"?"適深":"浅い")+(c.q.recoil?"・リコイル可":"")):"未開始"}　/　換気 ${c.q.ventStarted?(c.q.intubated?(c.q.ventRate+"回/分(挿管)"):"BMV"):"なし"}</div></div>
+
+      <div class="sub" style="margin:4px 2px">① 初期評価</div>
+      ${btnG(cb("cprCall('help','応援要請。記録係・タイマーを割り当てる。')","応援要請",c.flags.has('help'))+cb("cprCall('resp','反応・脈・呼吸を10秒以内で確認。CPA確定。')","反応/呼吸確認",c.flags.has('resp'))+cb("cprStartBLS()","BLS開始",c.status!=='cpa_suspected')+cb("cprCall('cause','可逆的原因(Hs&Ts)を検索。')","原因検索",c.flags.has('cause')))}
+
+      <div class="sub" style="margin:4px 2px">② BLS（胸骨圧迫・換気）</div>
+      ${btnG(cb("cprCompress()","胸骨圧迫 開始",c.q.compStarted)+cb("cprTechModal()","圧迫位置",c.q.techniqueOK)+cb("cprIntubate()","気管挿管",c.q.intubated)+cb("cprBagMask()","バッグマスク換気",c.q.ventStarted&&!c.q.intubated)+cb("cprVentModal()","換気回数",false)+cb("cprCall('o2','酸素100%を接続。')","酸素100%",c.flags.has('o2')))}
+
+      <div class="sub" style="margin:4px 2px">③ ALS（pauseで判定・除細動・薬剤）</div>
+      ${btnG(cb("cprAttachECG()","ECG装着",c.mon.ecg)+cb("cprAttachEtco2()","ETCO₂装着",c.mon.etco2)+cb("cprIV()","IV確保",c.access==='iv')+cb("cprIO()","IO確保",c.access==='io')+cb("cprAssess()","リズム判定",c.rhythm!=='unknown')+cb("cprDefibModal()","除細動",false)+cb("cprDrugModal()","薬剤投与",false)+cb("cprLytes()","K/Ca確認",c.mon.lytes))}
+
+      <div class="sub" style="margin:4px 2px">④ サイクル / 判定</div>
+      ${btnG(
+        (pause? cb("cprNext()","▶ 次サイクル開始",false)+cb("cprROSC()","ROSC判定（脈確認）",false)
+              : cb("cprRunCycle()","▶ 2分間CPRを実施",false)+cb("cprROSC()","ROSC判定",false))
+        + cb("cprTerminate()","蘇生中止",false)+`<div></div>`)}
+
+      <div class="card"><div class="sub" style="margin-bottom:4px">📋 経過</div><div class="log">${c.log.slice().reverse().map(e=>`<div class="e"><span class="ts">${fmt(e.t)}</span>${e.m}</div>`).join('')}</div></div>
+      <p class="tiny" style="margin:0 2px 14px">※教育用。胸骨圧迫の手技・用量・除細動エネルギー・薬剤は最新のRECOVERガイドライン／施設プロトコルで確認してください。投与量計算は学習用です。</p>
+    </div>
+  </div>`;
+}
+function cprLoop(){ const cv=document.getElementById('cprecg'); if(!cv||!S.cpr){cprRaf=requestAnimationFrame(cprLoop);return;}
+  const ctx=cv.getContext('2d'),W=cv.width,H=cv.height; ctx.fillStyle="#03100a";ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="#0c2a1a";ctx.lineWidth=1; for(let x=0;x<W;x+=18){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  if(!S.cpr._b){S.cpr._b=new Array(W).fill(H/2);S.cpr._x=0;S.cpr._ph=0;}
+  const c=S.cpr, rhythmShown=c.rhythm!=="unknown";
+  for(let s=0;s<4;s++){ c._x=(c._x+1)%W; let y=H/2;
+    if(c.status==="rosc"||c.rhythm==="organized_with_pulse"||c.rhythm==="rosc"){ c._ph+=1/40;if(c._ph>=1)c._ph-=1; y=H/2-ecgSample(c._ph)*H*0.4; }
+    else if(rhythmShown&&c.rhythm==="vf"){ y=H/2+(Math.sin(c._x*0.7)+Math.sin(c._x*1.9))*H*0.18+(Math.random()-0.5)*4; }
+    else if(rhythmShown&&c.rhythm==="pea"){ c._ph+=1/55;if(c._ph>=1)c._ph-=1; y=H/2-ecgSample(c._ph)*H*0.3; }
+    else if(rhythmShown&&c.rhythm==="asystole"){ y=H/2+(Math.random()-0.5)*2; }
+    else if(c.q.compStarted&&c.status==="bls_active"){ y=H/2 - Math.max(0,Math.sin(c._x*0.5))*H*0.28; } // 圧迫アーチファクト
+    else { y=H/2+(Math.random()-0.5)*2; }
+    c._b[c._x]=y; for(let k=1;k<5;k++)c._b[(c._x+k)%W]=null;
+  }
+  ctx.strokeStyle="#37e08a";ctx.lineWidth=2;ctx.beginPath();let st=false;
+  for(let x=0;x<W;x++){const y=c._b[(c._x+1+x)%W];if(y==null){st=false;continue;}if(!st){ctx.moveTo(x,y);st=true;}else ctx.lineTo(x,y);} ctx.stroke();
+  cprRaf=requestAnimationFrame(cprLoop);
+}
 
 listCases();
 </script>

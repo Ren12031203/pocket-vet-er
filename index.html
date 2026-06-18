@@ -192,7 +192,7 @@ const HX_GROUPS=[
 ];
 const HX_KW={ hx_cc:["主訴","どうし","どうされ","訴え","なに","何が"],hx_onset:["いつ","発症","時期","始ま","から","波","だんだん"],
   hx_course:["経過","続","ずっと"],hx_trigger:["誘因","きっかけ","原因","前に","ストレス","ホテル","トリミング","散歩","あと","直後"],
-  hx_appetite:["食欲","嘔吐","吐","食べ","ごはん","便","下痢","うんち"],hx_urine:["尿","おしっこ","排尿","トイレ","出ない"],
+  hx_appetite:["食欲","嘔吐","吐","食べ","ごはん","便","下痢","うんち","回数","何回","回","性状","程度","ひどい","水様","血便","泥状","色","どんな"],hx_urine:["尿","おしっこ","排尿","トイレ","出ない"],
   hx_resp:["呼吸","咳","息","苦し","ハァ"],hx_fever:["発熱","熱","元気","ぐったり"],hx_neuro:["発作","ふらつき","痙攣","けいれん","めまい","倒れ"],
   hx_pmh:["既往","過去","以前","前","持病","薬","内服","治療","繰り返","昔","点滴","注射","ステロイド"],hx_tox:["誤食","中毒","異物","拾い","外傷","事故","ぶつ"],
   hx_diet:["食事","水","飲","フード","環境","室内"],hx_vacc:["ワクチン","予防","接種"] };
@@ -311,14 +311,14 @@ function labText(id){
   }).filter(Boolean);
   // Na:K比（電解質を測ったとき）
   if(keys.includes("Na")&&keys.includes("K")&&S.h.Na!=null&&S.h.K!=null){ const rt=S.h.Na/S.h.K;
-    parts.push("Na:K比 "+rt.toFixed(0)+(rt<28?"（低下：正常27–40。副腎機能低下・腎/消化器疾患等を示唆）":"")); }
+    parts.push("Na:K比 "+rt.toFixed(0)+(rt<28?"↓（基準 27–40）":"")); }
   keys.forEach(a=>{ if(S.h[a]!=null){ S.labTimeline.push({a,v:S.h[a],t:S.t,id}); S.labPrev[a]=S.h[a]; } });
   // 異常の有無で赤字判定用フラグ
   const anyAbn=keys.some(a=>S.h[a]!=null&&flagOf(a,S.h[a]));
-  // 文脈依存の臨床的意味（処置前後で解釈が変わる）
-  let interp=""; const ic=S.C.interp;
-  if(ic){ const seen=new Set(); keys.forEach(a=>{ if(ic[a]&&!seen.has(a)){ const t=ic[a](S); if(t){interp+=" "+t; seen.add(a);} } }); }
-  return {text:parts.join("、")+"。"+interp, abn:anyAbn};
+  // 文脈依存の臨床的意味は「最終評価の解説」に回す（プレイ中は素のデータのみ＝プレイヤーが解釈する）
+  const ic=S.C.interp;
+  if(ic){ keys.forEach(a=>{ if(ic[a]){ const t=ic[a](S); if(t)S.labInterps[a]=t; } }); }
+  return {text:parts.join("、")+"。", abn:anyAbn};
 }
 
 /* ---------- グローバルCPAトリガーエンジン ---------- */
@@ -384,7 +384,7 @@ const CASES = {
     res:{
       hx_cc:{text:"排尿しようとしても出ない。今朝からぐったりして、下腹部を痛がる。",s:2,time:30},
       hx_urine:{text:"昨夕から尿が出ず、頻回にトイレへ行くが少量。今朝からは全く出ていない。",s:6,time:30,flag:["hx_anuria"],tag:"good"},
-      hx_appetite:{text:"今朝から2回嘔吐。昨夜から食欲なし。",s:2,time:30},
+      hx_appetite:{text:"今朝から2回嘔吐（食物様→透明な液体）。昨夜から食欲は完全に廃絶。下痢はない。",s:2,time:30},
       hx_onset:{text:"昨日夕方からの急性経過。",s:1,time:30},
       hx_pmh:{text:"半年前にも一度、排尿しづらいことがあった。",s:1,time:30},
       ex_abd:{text:"下腹部に大きく硬く緊満した疼痛性の膀胱を触知する。",s:8,time:60,flag:["bladder_known"],tag:"critical",miss:-12},
@@ -399,7 +399,7 @@ const CASES = {
       bigbolus:{text:"大量急速輸液を実施。猫では過剰輸液に注意。",s:1,time:30},
       warm:{text:"保温を開始。低体温傾向に対応。",s:3,time:30,reveal:["temp"],tag:"good"},
       ex_temp:{text:"直腸温 36.5℃（低体温）。",s:1,time:60,reveal:["temp"]},
-      l_ecg:{text:"P波平低化〜消失、テント状T波、QRS幅延長、徐脈。高K血症を強く示唆。（数値Kは電解質検査で確認）",s:8,time:120,reveal:["ecg"],flag:["hyperk_known"],tag:"critical",miss:-16},
+      l_ecg:{text:"P波の平低化〜消失、テント状T波、QRS幅延長、徐脈。（数値Kは電解質検査で確認）",s:8,time:120,reveal:["ecg"],flag:["hyperk_known"],tag:"critical",miss:-16},
       l_lyte:{text:"Na 148、K 8.5、Cl 112、iCa 1.05。Kが著明高値。",s:8,time:120,reveal:["K"],flag:["hyperk_known"],tag:"critical",critGroup:"k_measure",critLabel:"血清Kを測定（電解質/K/血ガスのいずれか）",miss:-16},
       l_k:{text:"K 8.5 mEq/L（著明高値）。",s:8,time:120,reveal:["K"],flag:["hyperk_known"],tag:"critical",critGroup:"k_measure",critLabel:"血清Kを測定（電解質/K/血ガスのいずれか）",miss:-16},
       l_gas:{text:"pH 7.18、HCO₃⁻ 12、BE −13、K 8.5。代謝性アシドーシス。",s:5,time:120,reveal:["K"],flag:["hyperk_known"],tag:"critical",critGroup:"k_measure",critLabel:"血清Kを測定（電解質/K/血ガスのいずれか）",miss:-16},
@@ -456,7 +456,7 @@ const CASES = {
     res:{
       hx_cc:{text:"夕食後に腹が膨れ、吐こうとするが出ない。落ち着かない。",s:2,time:30},
       hx_onset:{text:"夕食後の急性発症。腹部膨満が進行。",s:3,time:30,tag:"good"},
-      hx_appetite:{text:"吐こうとするが何も出ない（非生産的嘔吐）。",s:4,time:30,tag:"good"},
+      hx_appetite:{text:"夕食後から繰り返し吐こうとするが何も出ない（非生産的嘔吐、回数は数えきれない）。流涎が目立つ。下痢はない。",s:4,time:30,tag:"good"},
       ex_abd:{text:"腹部は太鼓様に膨満、鼓音、強い緊張。",s:7,time:60,tag:"critical",miss:-12},
       ex_mm:{text:"粘膜蒼白、CRT 3秒。",s:3,time:60,tag:"good"},
       ex_pulse:{text:"末梢動脈は速く弱い。",s:3,time:60,tag:"good"},
@@ -554,7 +554,7 @@ const CASES = {
       hx_onset:{text:"以前から時々食欲が落ちる日があり、嘔吐や軟便も波があって自然に戻っていた。",s:5,time:30,tag:"good"},
       hx_trigger:{text:"トリミングやペットホテル、長い散歩の後に悪化しやすい。",s:5,time:30,flag:["stress_history"],tag:"good"},
       hx_pmh:{text:"以前『胃腸炎』として点滴・注射で一時的に改善したことがある。ステロイドの常用はない。",s:3,time:30,tag:"good"},
-      hx_appetite:{text:"嘔吐あり、軟便傾向。",s:1,time:30},
+      hx_appetite:{text:"ここ2日で嘔吐3〜4回、軟便（泥状、血便なし）。食欲はむらがあり、ここ数日はほとんど食べていない。",s:2,time:30,tag:"good"},
       hx_tox:{text:"誤食の心当たりはない。",s:1,time:30},
       hx_urine:{text:"排尿は普通にできている。",s:1,time:30},
       ex_general:{text:"沈鬱、元気消失。",s:2,time:60,tag:"good"},
@@ -579,9 +579,9 @@ const CASES = {
       l_ua:{text:"尿比重 1.018（脱水の割に不適切に低い）。腎髄質洗い出しを示唆。",s:4,time:120,tag:"good"},
       l_us:{text:"腹部超音波：副腎は小型傾向。外科疾患は指摘されない。",s:3,time:180,tag:"good"},
       l_abd:{text:"腹部X線：microcardia・後大静脈の細小化を示唆。外科腹症なし。",s:2,time:180},
-      l_cortisol:{text:"基礎コルチゾール低値（<2 µg/dL）。副腎皮質機能低下症を強く疑う。",s:8,time:120,flag:["cortisol_sampled"],tag:"critical",critGroup:"adrenal_workup",critLabel:"副腎機能評価（基礎コルチゾール/ACTH刺激）",miss:-14},
-      l_acthstim:{text:"ACTH刺激試験：刺激後もコルチゾール上昇に乏しく、副腎皮質機能低下症が確定的。",s:10,time:120,flag:["cortisol_sampled","acth_done"],tag:"critical",critGroup:"adrenal_workup",critLabel:"副腎機能評価（基礎コルチゾール/ACTH刺激）",miss:-14},
-      l_acth:{text:"内因性ACTH高値。原発性（一次性）副腎皮質機能低下症を支持。",s:4,time:120,flag:["cortisol_sampled"],tag:"good"},
+      l_cortisol:{text:"基礎コルチゾール 1.5 µg/dL（基準: >2 µg/dL で副腎機能低下を除外）。低値。",s:8,time:120,flag:["cortisol_sampled"],tag:"critical",critGroup:"adrenal_workup",critLabel:"副腎機能評価（基礎コルチゾール/ACTH刺激）",miss:-14},
+      l_acthstim:{text:"ACTH刺激試験：刺激前 1.5 → 刺激後 1.8 µg/dL（基準: 刺激後 6–17）。刺激後の上昇に乏しい。",s:10,time:120,flag:["cortisol_sampled","acth_done"],tag:"critical",critGroup:"adrenal_workup",critLabel:"副腎機能評価（基礎コルチゾール/ACTH刺激）",miss:-14},
+      l_acth:{text:"内因性ACTH 高値。",s:4,time:120,flag:["cortisol_sampled"],tag:"good"},
       d_dexameth:{text:"デキサメタゾンを投与。コルチゾール測定に干渉しにくく、グルココルチコイド補充として許容（可能なら採血後）。",s:6,time:60,tag:"good"},
       d_hydrocort:{text:"ヒドロコルチゾンを投与。",s:5,time:60,tag:"good",need:[{f:["cortisol_sampled"],pen:-6,msg:"ACTH刺激/基礎コルチゾール採血前のヒドロコルチゾンはコルチゾール測定に干渉。先に採血を（救命優先なら許容）。"}]},
       d_predniso:{text:"プレドニゾロンを投与。",s:0,time:60,need:[{f:["cortisol_sampled"],pen:-12,msg:"ACTH刺激試験前のプレドニゾロンはコルチゾール測定に強く干渉し診断を妨げる。デキサメタゾンを選ぶ。"}]},
@@ -616,7 +616,7 @@ const CASES = {
       hx_cc:{text:"昨日から嘔吐と水様〜軟便。今朝から急に立てない。",s:2,time:30},
       hx_onset:{text:"以前からたまに食欲が落ちることはあったが自然に戻っていた。",s:3,time:30,tag:"good"},
       hx_trigger:{text:"数日前にペットホテル/トリミング/長い散歩などのストレスイベントがあった。",s:5,time:30,flag:["stress_history"],tag:"good"},
-      hx_appetite:{text:"嘔吐・下痢あり。",s:1,time:30},
+      hx_appetite:{text:"昨日から嘔吐5〜6回、水様〜泥状の下痢（血便はない）。今朝からは食べず、立てない。",s:2,time:30,tag:"good"},
       hx_pmh:{text:"診断された持病はなく、ステロイドの常用もない。",s:2,time:30},
       hx_tox:{text:"誤食の心当たりはない。",s:1,time:30},
       ex_general:{text:"沈鬱、起立困難。",s:2,time:60,tag:"good"},
@@ -643,12 +643,12 @@ const CASES = {
       l_lactate:{s:3,time:60,reveal:["lactate"],tag:"good"},
       l_cbc:{text:"ストレス白血球像を欠く（リンパ球・好酸球が保たれる）。",s:5,time:120,flag:["no_stress_leukogram"],tag:"good"},
       l_ua:{text:"尿比重が脱水の割に不適切に低い。",s:3,time:120,tag:"good"},
-      l_ecg:{text:"徐脈、T波増高、P波低振幅。高K血症を示唆。（数値Kは電解質検査で確認）",s:6,time:120,reveal:["ecg"],flag:["hyperk_known"],tag:"good"},
+      l_ecg:{text:"徐脈、T波の増高、P波の低振幅。（数値Kは電解質検査で確認）",s:6,time:120,reveal:["ecg"],flag:["hyperk_known"],tag:"good"},
       l_us:{text:"AFAST：明らかな腹腔内出血や外科疾患なし。副腎は小型傾向。",s:3,time:120,tag:"good"},
       l_abd:{text:"腹部X線：外科腹症・GDVは否定的。microcardia傾向。",s:2,time:180},
-      l_cortisol:{text:"基礎コルチゾール低値（<2 µg/dL）。副腎クリーゼを強く疑う。",s:8,time:120,flag:["cortisol_sampled"],tag:"critical",critGroup:"adrenal_workup",critLabel:"副腎機能評価（基礎コルチゾール/ACTH刺激）",miss:-12},
-      l_acthstim:{text:"ACTH刺激試験：刺激後もコルチゾール上昇に乏しく確定的。可能なら救急初期に採血を。",s:9,time:120,flag:["cortisol_sampled","acth_done"],tag:"critical",critGroup:"adrenal_workup",critLabel:"副腎機能評価（基礎コルチゾール/ACTH刺激）",miss:-12},
-      l_acth:{text:"内因性ACTH高値。原発性を支持。",s:3,time:120,flag:["cortisol_sampled"],tag:"good"},
+      l_cortisol:{text:"基礎コルチゾール 1.2 µg/dL（基準: >2 µg/dL で除外）。低値。",s:8,time:120,flag:["cortisol_sampled"],tag:"critical",critGroup:"adrenal_workup",critLabel:"副腎機能評価（基礎コルチゾール/ACTH刺激）",miss:-12},
+      l_acthstim:{text:"ACTH刺激試験：刺激前 1.2 → 刺激後 1.5 µg/dL（基準: 刺激後 6–17）。上昇に乏しい。（採血は救急初期に）",s:9,time:120,flag:["cortisol_sampled","acth_done"],tag:"critical",critGroup:"adrenal_workup",critLabel:"副腎機能評価（基礎コルチゾール/ACTH刺激）",miss:-12},
+      l_acth:{text:"内因性ACTH 高値。",s:3,time:120,flag:["cortisol_sampled"],tag:"good"},
       d_dexameth:{text:"デキサメタゾンを投与。救急のグルココルチコイド補充として適切で、コルチゾール測定にも干渉しにくい。",s:8,time:60,tag:"good"},
       d_hydrocort:{text:"ヒドロコルチゾンを投与。",s:6,time:60,tag:"good",need:[{f:["cortisol_sampled"],pen:-6,msg:"ACTH刺激/基礎コルチゾール採血前は測定に干渉。先に採血を（救命優先なら許容）。"}]},
       d_predniso:{text:"プレドニゾロンを投与。",s:0,time:60,need:[{f:["cortisol_sampled"],pen:-12,msg:"ACTH刺激試験前のプレドニゾロンは強く干渉。デキサメタゾンを選ぶ。"}]},
@@ -679,7 +679,7 @@ function startCase(cid){
      disp:{HR:NaN,SBP:NaN,SpO2:NaN,RR:NaN},
      flags:new Set(),cflags:new Set(),revealed:new Set(),
      sel:new Set(),scored:new Set(),dx:new Set(),dispo:null,snap:{},results:[],
-     labTimeline:[],labPrev:{},
+     labTimeline:[],labPrev:{},labInterps:{},
      dz:new Set(C.dz||[]),adverseEvents:[],cpaCtx:null,
      caT:0,stress:0,arrest:false,dead:false,rosc:false,cpr:null,score:0,log:[]};
   arrestShown=false; reopen=null;
@@ -871,9 +871,13 @@ function itemBtn(id,label){ const sel=S.sel.has(id);
   return `<button class="item ${sel?'sel':''}" onclick="doAction('${id}')"><span class="tick">${sel?'✓':'＋'}</span><span>${label}</span></button>`; }
 function renderCat(key){
   const c=catByKey(key);
-  const q=(window._csearch||'').toLowerCase();
   let h=`<h3>${c.cat}<button class="x" onclick="closeSheet()">×</button></h3>`;
-  if(c.search)h+=`<input id="catsearch" type="text" placeholder="🔎 検索" value="${window._csearch||''}" oninput="window._csearch=this.value;renderCat('${key}')" style="margin-bottom:8px">`;
+  if(c.search)h+=`<input id="catsearch" type="text" placeholder="🔎 検索" value="${window._csearch||''}" oninput="window._csearch=this.value;filterCatList('${key}')" style="margin-bottom:8px">`;
+  h+=`<div id="catlist">${catListHTML(key)}</div>`; // 入力欄は据え置き、リストだけ更新（日本語入力が途切れない）
+  openSheet(h);
+}
+function catListHTML(key){
+  const c=catByKey(key); const q=(window._csearch||'').toLowerCase(); let h='';
   if(c.groups){
     let any=false;
     for(const grp of c.groups){
@@ -891,10 +895,9 @@ function renderCat(key){
     if(!items.length)h+='<div class="tiny" style="padding:8px">該当なし</div>';
   }
   h+=resultsHTML([{lab:'lab',drug:'drug',proc:'proc',stab:'stab'}[key]]);
-  openSheet(h);
-  // 検索中（文字が入っている時）だけフォーカスを保持。開いた直後や項目選択後はキーボードを出さない
-  if(c.search && (window._csearch||'').length>0){ const el=document.getElementById('catsearch'); if(el){ el.focus(); el.setSelectionRange(el.value.length,el.value.length);} }
+  return h;
 }
+function filterCatList(key){ const el=document.getElementById('catlist'); if(el)el.innerHTML=catListHTML(key); }
 
 // ---------- 患者対応（問診・診察） ----------
 let _ptab="hx";
@@ -1066,6 +1069,7 @@ function showResult(){
     ${harmHtml?`<div class="card"><div class="sub">⛔ 禁忌・不適切だった行動</div><div class="log">${harmHtml}</div></div>`:''}
     ${advHtml?`<div class="card"><div class="sub">💊 薬剤副作用・医原性（減点）</div><div class="log">${advHtml}</div></div>`:''}
     ${unnecHtml?`<div class="card"><div class="sub">▽ 影響の小さかった/不要な行動</div><div class="log">${unnecHtml}</div></div>`:''}
+    ${Object.keys(S.labInterps||{}).length?`<div class="card"><div class="sub">📖 検査の読み方（解説）</div><div class="log">${Object.values(S.labInterps).map(t=>`<div class="e">${t}</div>`).join('')}</div></div>`:''}
     <div class="card"><div class="sub">📖 解説</div><p style="margin:6px 0">${C.finalNote}</p>
       <p class="tiny">※用量・手技・実診療判断は最新のガイドライン／添付文書／施設プロトコルで確認してください。</p></div>
     <button class="btn primary" onclick="startCase('${S.cid}')">▶ もう一度</button>

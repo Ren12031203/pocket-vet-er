@@ -512,22 +512,7 @@ function tick(){
   if(S.arrest&&!S.rosc&&!S.dead&&!S.cpr)enterCPR();
   render();
 }
-function onArrest(){
-  if(arrestShown)return; arrestShown=true; S.disp.HR=0;S.disp.SBP=0;S.disp.SpO2=0;
-  log("⚠ 心停止に至った。"); document.getElementById('alarm').textContent="🔴 CARDIAC ARREST";
-  openSheet(`<h3>🔴 心停止<button class="x" onclick="closeSheet()">×</button></h3>
-    <p class="tiny">原疾患への対処が遅れ、心停止に至りました。根本原因に対処できていないと蘇生反応は乏しいです。</p>
-    <button class="btn" style="margin-bottom:8px" onclick="tryResus()">CPCRを試みる</button>
-    <button class="btn primary" onclick="closeSheet();finalize()">最終評価へ</button>`);
-}
-function tryResus(){
-  const ok=S.cid==="cat_uo"?(S.caT>0&&(S.flags.has("p_cysto")||S.flags.has("p_ucath")))
-         :S.cid==="dog_gdv"?(S.flags.has("p_gastrocen")||S.flags.has("p_ogtube"))
-         :S.flags.has("p_thoraco");
-  if(ok){ S.arrest=false;S.rosc=true;arrestShown=false; log("✅ ROSC（自己心拍再開）。");
-    document.getElementById('alarm').textContent="🟢 ROSC"; closeSheet(); }
-  else{ S.dead=true; clearInterval(timer); log("蘇生に反応せず。"); closeSheet(); finalize(); }
-}
+// CPA発生時は必ず enterCPR() に統一（旧 onArrest()/tryResus() は廃止）
 
 // ---------- アクション ----------
 function res(id){ return (S.C.res&&S.C.res[id])?S.C.res[id]:defaultResult(id); }
@@ -1025,8 +1010,9 @@ function cprDefib(wave){ const c=S.cpr;
   if(inPause())c.q.handsOff+=4;
   const prev=c.defibs.length;
   const j= wave==="biphasic"?(prev===0?2:4):(prev===0?4:8);
-  const chance=prev===0?0.45+c.roscProb/200:0.25+c.roscProb/250;
-  const ok=Math.random()<Math.max(0.05,Math.min(0.8,chance));
+  // 手順が良いほど成功率↑・失敗が続くほど↑（完全な運ゲーにしない）
+  const chance=0.30 + c.roscProb/150 + prev*0.10 + (c.flags.has("cause_addressed")?0.05:0);
+  const ok=Math.random()<Math.max(0.10,Math.min(0.85,chance));
   c.defibs.push({cycle:c.cycle,j,wave,ok});
   c.score+= prev===0?20:12;
   cprLog((wave==="biphasic"?"二相性":"単相性")+`除細動 ${j} J/kg（${prev===0?"初回標準":"倍量維持"}）。`);
@@ -1118,20 +1104,24 @@ function cprNext(){ const c=S.cpr;
   c.cycle+=1; c.cycleSec=0; c.status="bls_active"; c.q.handsOff=0; c.q.fatigue=0;
   if(c.q.depth==="too_shallow"&&c.q.techniqueOK)c.q.depth="adequate";
   renderCPR(); }
+const ROSC_THRESHOLD=20;
+function cprReArrest(){ const c=S.cpr; const cause=c.m.cause, addressed=c.flags.has("cause_addressed");
+  const base={hyperkalemia:35,iatrogenic_hyperkalemia:35,oxygenation_failure:35,shock_lactic_acidosis:30,obstructive_shock:40,drug_induced:20,sedation_related_cpa:20,anesthesia_related_cpa:20,hypoglycemia:25}[cause]||10;
+  const risk = addressed? Math.max(5,base-30) : base;
+  return {risk, label:(risk>=30?"高リスク":risk>=15?"中等度":"低い"), addressed, unresolved:REVERSIBLE_CAUSES.includes(cause)&&!addressed, cause}; }
+// ROSC＝アウトカム判定。CPR品質・リズム制御・客観的循環回復で成立し得る（原因治療は“絶対条件”ではなく修飾因子）
 function cprROSC(){ const c=S.cpr; if(!inPause()){cprLog("ROSC判定はpauseで（脈・血圧・ETCO₂を確認）。");return;}
   c.q.handsOff+=3; const e=c.mon.etco2v||0;
-  const quality = c.q.compStarted && c.mon.etco2 && e>=18;        // ETCO₂≥18 は「CPR品質」の指標
-  const reversible = REVERSIBLE_CAUSES.includes(c.m.cause);
-  const causeOk = !reversible || c.flags.has("cause_addressed");   // 可逆的原因は治療が前提
-  const rhythmOk = c.rhythm==="organized_with_pulse" || (!isShock(c.trueRhythm) && c.roscProb>=20); // 組織化リズム＋拍動
-  if(quality && causeOk && rhythmOk){ c.status="rosc";c.rhythm="rosc";c.score+=40;
-    cprLog("ROSC確認。ETCO₂の持続上昇＋組織化リズム/動脈拍動、可逆的原因への対処を確認。CPRを終了しPCA管理へ。"); cprDebrief(true); }
-  else{ c.score-=5;
-    const why = !quality?"CPR品質が不十分（ETCO₂≥18を目標に圧迫・換気を最適化）。"
-      : !causeOk?"可逆的原因（"+causeLabel(c.m.cause)+"）への治療がまだ。原因治療が必要。"
-      : isShock(c.trueRhythm)?"ショック適応リズムが持続。除細動で組織化を。"
-      :"循環回復の客観的根拠が不十分。";
-    cprLog("ROSCの根拠が不十分："+why+" 圧迫を継続。"); renderCPR(); } }
+  const quality = c.q.compStarted && c.q.ventStarted && c.mon.etco2 && e>=18;     // ETCO₂≥18=CPR品質の指標
+  const rhythmOk = c.rhythm==="organized_with_pulse" || (!isShock(c.trueRhythm) && c.roscProb>=ROSC_THRESHOLD);
+  const objective = c.rhythm==="organized_with_pulse" || e>=30 || (!isShock(c.trueRhythm) && c.roscProb>=ROSC_THRESHOLD); // 客観的循環回復の根拠
+  if(quality && rhythmOk && objective){ c.status="rosc";c.rhythm="rosc";
+    cprLog("ROSC確認。ETCO₂上昇＋組織化リズム/客観的循環回復を確認。CPRを終了しPCA管理へ。"); cprDebrief(true); }
+  else{ c.score-=3;
+    const why = !quality?"CPR品質不足：胸骨圧迫・換気・ETCO₂≥18を見直す。"
+      : isShock(c.trueRhythm)?"VF/PVTが組織化リズムへ移行していない。除細動を継続。"
+      : `非ショックリズムでROSC根拠が不足（${Math.round(c.roscProb)}/${ROSC_THRESHOLD}）。圧迫の質・血管収縮薬・原因治療で上げる。`;
+    cprLog("ROSCの客観的根拠が不十分："+why); renderCPR(); } }
 function cprTerminate(){ const c=S.cpr; c.status="terminated"; cprLog("蘇生を中止した。"); cprDebrief(false); }
 
 // --- スコア・デブリーフ ---
@@ -1154,10 +1144,10 @@ function scoreCPR(){ const c=S.cpr; let s=0; const cm=[];
   if(c.drugs.filter(d=>d.id==="atropine").length>1){s-=20;cm.push(["bad","アトロピンを反復投与した。"]);}
   if(c.defibs.length>0&&!isShock(c.trueRhythm)){s-=15;cm.push(["bad","非ショック適応リズムに除細動した。"]);}
   if(isShock(c.trueRhythm)&&c.defibs.length===0&&c.q.compStarted){s-=10;cm.push(["bad","ショック適応リズムに除細動していない。"]);}
-  if(REVERSIBLE_CAUSES.includes(c.m.cause)){ if(c.flags.has("cause_addressed")){s+=10;cm.push(["ok","可逆的原因（"+causeLabel(c.m.cause)+"）への治療を実施した。"]);} else cm.push(["bad","可逆的原因（"+causeLabel(c.m.cause)+"）への治療がない。ROSCに至りにくい。"]); }
-  if(c.status==="rosc"){s+=40;cm.push(["ok","ROSCを達成した。"]);}
+  if(REVERSIBLE_CAUSES.includes(c.m.cause)){ if(c.flags.has("cause_addressed")){s+=10;cm.push(["ok","可逆的原因（"+causeLabel(c.m.cause)+"）への治療を実施した。"]);} else cm.push(["warn","可逆的原因（"+causeLabel(c.m.cause)+"）が未治療。ROSC後の再CPAリスクが高い。"]); }
+  // ※ ROSC達成（アウトカム）はProcess Gradeには含めず、別表示する
   s=Math.max(0,s);
-  const g= s>=105?"S":s>=85?"A":s>=60?"B":s>=35?"C":"D";
+  const g= s>=92?"S":s>=74?"A":s>=52?"B":s>=30?"C":"D";
   return {grade:g,score:s,comments:cm};
 }
 function cprDebrief(rosc){ if(cprRaf){cancelAnimationFrame(cprRaf);cprRaf=null;}
@@ -1165,17 +1155,26 @@ function cprDebrief(rosc){ if(cprRaf){cancelAnimationFrame(cprRaf);cprRaf=null;}
   const gcol=(r.grade==="S"||r.grade==="A")?"var(--green)":r.grade==="B"?"var(--amber)":"var(--red)";
   const oks=r.comments.filter(c=>c[0]==="ok").map(c=>c[1]);
   const fails=r.comments.filter(c=>c[0]==="bad").map(c=>c[1]);
-  let rows=r.comments.map(c=>`<div class="e"><span class="rchip ${c[0]}">${c[0]==="ok"?"○":"×"}</span>${c[1]}</div>`).join('');
+  const sym=t=>t==="ok"?"○":t==="warn"?"△":"×";
+  let rows=r.comments.map(c=>`<div class="e"><span class="rchip ${c[0]}">${sym(c[0])}</span>${c[1]}</div>`).join('');
+  const ra=cprReArrest();
+  const racol=ra.risk>=30?'var(--red)':ra.risk>=15?'var(--amber)':'var(--green)';
+  const pcaCard = rosc?`<div class="card" style="border-color:${ra.risk>=30?'#6b2330':ra.risk>=15?'#6b561d':'#1d6b50'}"><div class="sub">🫀 蘇生後（PCA）安定性</div><div class="log">
+    <div class="e">再CPAリスク：<b style="color:${racol}">${ra.label}</b></div>
+    ${ra.unresolved?`<div class="e"><span class="rchip bad">!</span>未対処の原因：<b>${causeLabel(ra.cause)}</b>（治療しないと再停止しやすい）</div>`:`<div class="e"><span class="rchip ok">○</span>可逆的原因に対処済み。ROSC後の安定性は良好。</div>`}
+    <div class="e tiny">PCAで評価：酸素化・換気・血圧・ECG・ETCO₂・血糖・電解質・乳酸・体温・原因治療・神経状態</div></div></div>`:'';
   let drugs=S.cpr.drugs.length?S.cpr.drugs.map(d=>`${CPR_DRUGS.find(x=>x.id===d.id).label}（${fmt(d.t)}/サイクル${d.cycle+1}/${d.route.toUpperCase()}）`).join('<br>'):"なし";
   let defs=S.cpr.defibs.length?S.cpr.defibs.map(d=>`${d.j}J/kg ${d.wave==="biphasic"?"二相性":"単相性"} ${d.ok?"→組織化":"→持続"}`).join('<br>'):"なし";
   const failCard = (!rosc&&fails.length)?`<div class="card" style="border-color:#6b2330"><div class="sub" style="color:var(--red)">❗ ROSCに至らなかった主な要因</div><div class="log">${fails.map(f=>`<div class="e"><span class="rchip bad">×</span>${f}</div>`).join('')}</div></div>`:'';
   document.getElementById('cpr').innerHTML=`<div class="pad" style="overflow:auto;height:100%">
     <div style="text-align:center;margin:6px 0 10px"><div class="pill">CPR/ALS デブリーフ（RECOVER 2024）</div>
       <div class="scoreBig" style="color:${gcol}">${r.grade}</div>
-      <div class="sub">スコア ${r.score} 点　／　${rosc?"ROSC 達成 🟢":"ROSC 未達"}　／　${S.cpr.cycle+1}サイクル・${fmt(S.cpr.totalSec)}</div>
-      <div class="tiny" style="margin-top:3px">CPA原因：${causeLabel(S.cpr.m.cause)}${S.cpr.m.iatrogenic?'（医原性・回避可能だった可能性）':S.cpr.m.preventable!==false?'（予防可能な進行）':''}</div></div>
+      <div class="sub" style="margin-top:-2px">CPR Process Grade（手技の質）　${r.score}点</div>
+      <div class="sub" style="margin-top:6px;font-weight:700">Outcome：${rosc?'<span style="color:var(--green)">🟢 ROSC 達成</span>':'<span style="color:var(--red)">🔴 ROSC 未達</span>'}</div>
+      <div class="tiny" style="margin-top:3px">${S.cpr.cycle+1}サイクル・${fmt(S.cpr.totalSec)}　/　CPA原因：${causeLabel(S.cpr.m.cause)}${S.cpr.m.iatrogenic?'（医原性・回避可能だった可能性）':S.cpr.m.preventable!==false?'（予防可能な進行）':''}</div></div>
     ${failCard}
-    <div class="card"><div class="sub">評価（RECOVER 2024 とのズレ）</div><div class="log">${rows}</div></div>
+    ${pcaCard}
+    <div class="card"><div class="sub">手技の評価（RECOVER 2024 とのズレ）</div><div class="log">${rows}</div></div>
     <div class="card"><div class="sub">記録</div><div class="tiny" style="line-height:1.7">投与薬剤：<br>${drugs}<br><br>除細動：<br>${defs}</div></div>
     ${S.cid==='practice'
     ? `<button class="btn primary" onclick="openCPRPractice()">▶ もう一度 練習する</button>
@@ -1188,12 +1187,14 @@ function cprDebrief(rosc){ if(cprRaf){cancelAnimationFrame(cprRaf);cprRaf=null;}
   </div>`;
 }
 function cprReturnToCare(){ // ROSC後、通常診療へ復帰（蘇生後管理）
+  const ra=cprReArrest();
   S.arrest=false; S.rosc=true; S.cpr.status="rosc";
-  S.h.HR=120; S.h.SBP=95; S.h.SpO2=95; S.h.RR=24;
+  // 原因未対処なら不安定な蘇生後状態（再CPAリスク）として戻す
+  S.h.HR=ra.unresolved?96:120; S.h.SBP=ra.unresolved?78:95; S.h.SpO2=94; S.h.RR=ra.unresolved?34:24;
   document.getElementById('cpr').classList.add('hide');
   document.getElementById('sim').classList.remove('hide');
-  document.getElementById('alarm').textContent="🟢 ROSC";
-  log("ROSC後、蘇生後（PCA）管理として診療を再開。");
+  document.getElementById('alarm').textContent=ra.unresolved?'🟠 ROSC（不安定）':'🟢 ROSC';
+  log(ra.unresolved?("ROSC後、PCA管理を開始。可逆的原因（"+causeLabel(ra.cause)+"）が未対処で再CPAリスク高い。原因治療を。"):"ROSC後、蘇生後（PCA）管理として診療を再開。");
   if(timer)clearInterval(timer); timer=setInterval(tick,1000);
   render();
 }

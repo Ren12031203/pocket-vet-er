@@ -76,6 +76,8 @@
   .log .ts{color:#5b6b7d;font-family:ui-monospace,monospace;font-size:11px;margin-right:6px}.warnmsg{color:var(--amber)}
   .bottombar{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:#0f141b;flex:0 0 auto}
   .monitor{flex:0 0 auto}
+  #cpr{position:fixed;inset:0;max-width:480px;margin:0 auto;background:var(--bg);z-index:55}
+  #cpr.hide{display:none}
   .bottombar .btn{padding:10px 6px;font-size:13px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
   .scoreBig{font-size:42px;font-weight:900}
@@ -1161,14 +1163,18 @@ function scoreCPR(){ const c=S.cpr; let s=0; const cm=[];
 function cprDebrief(rosc){ if(cprRaf){cancelAnimationFrame(cprRaf);cprRaf=null;}
   const r=scoreCPR(); const pct=Math.max(0,Math.min(150,r.score));
   const gcol=(r.grade==="S"||r.grade==="A")?"var(--green)":r.grade==="B"?"var(--amber)":"var(--red)";
+  const oks=r.comments.filter(c=>c[0]==="ok").map(c=>c[1]);
+  const fails=r.comments.filter(c=>c[0]==="bad").map(c=>c[1]);
   let rows=r.comments.map(c=>`<div class="e"><span class="rchip ${c[0]}">${c[0]==="ok"?"○":"×"}</span>${c[1]}</div>`).join('');
   let drugs=S.cpr.drugs.length?S.cpr.drugs.map(d=>`${CPR_DRUGS.find(x=>x.id===d.id).label}（${fmt(d.t)}/サイクル${d.cycle+1}/${d.route.toUpperCase()}）`).join('<br>'):"なし";
   let defs=S.cpr.defibs.length?S.cpr.defibs.map(d=>`${d.j}J/kg ${d.wave==="biphasic"?"二相性":"単相性"} ${d.ok?"→組織化":"→持続"}`).join('<br>'):"なし";
-  document.getElementById('cpr').innerHTML=`<div class="pad" style="overflow:auto;height:100dvh">
+  const failCard = (!rosc&&fails.length)?`<div class="card" style="border-color:#6b2330"><div class="sub" style="color:var(--red)">❗ ROSCに至らなかった主な要因</div><div class="log">${fails.map(f=>`<div class="e"><span class="rchip bad">×</span>${f}</div>`).join('')}</div></div>`:'';
+  document.getElementById('cpr').innerHTML=`<div class="pad" style="overflow:auto;height:100%">
     <div style="text-align:center;margin:6px 0 10px"><div class="pill">CPR/ALS デブリーフ（RECOVER 2024）</div>
       <div class="scoreBig" style="color:${gcol}">${r.grade}</div>
       <div class="sub">スコア ${r.score} 点　／　${rosc?"ROSC 達成 🟢":"ROSC 未達"}　／　${S.cpr.cycle+1}サイクル・${fmt(S.cpr.totalSec)}</div>
       <div class="tiny" style="margin-top:3px">CPA原因：${causeLabel(S.cpr.m.cause)}${S.cpr.m.iatrogenic?'（医原性・回避可能だった可能性）':S.cpr.m.preventable!==false?'（予防可能な進行）':''}</div></div>
+    ${failCard}
     <div class="card"><div class="sub">評価（RECOVER 2024 とのズレ）</div><div class="log">${rows}</div></div>
     <div class="card"><div class="sub">記録</div><div class="tiny" style="line-height:1.7">投与薬剤：<br>${drugs}<br><br>除細動：<br>${defs}</div></div>
     ${S.cid==='practice'
@@ -1194,13 +1200,13 @@ function cprReturnToCare(){ // ROSC後、通常診療へ復帰（蘇生後管理
 
 // --- CPR画面の描画 ---
 function btnG(html){ return `<div class="card"><div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">${html}</div></div>`; }
-function cb(onclick,label,on){ return `<button class="btn ${on?'':'ghost'}" style="padding:10px 6px;font-size:13px" onclick="${onclick}">${label}</button>`; }
+function cb(onclick,label,on){ return `<button class="btn ${on?'':'ghost'}" style="padding:10px 6px;font-size:13px;${on?'border-color:#1d6b50':''}" onclick="${onclick}">${on?'✓ ':''}${label}</button>`; }
 function renderCPR(){
   const c=S.cpr; const pause=inPause();
   const rh = c.rhythm==="unknown"?"— 判定前 —":rhythmName(c.rhythm);
   const et = c.mon.etco2? (c.mon.etco2v||"–")+" mmHg"+((c.mon.etco2v>=18)?" ✅":"") : "未装着";
   const statusTxt = c.status==="cpa_suspected"?"CPA疑い：初期評価を":c.status==="bls_active"?`BLS実施中（サイクル${c.cycle+1}）`:c.status==="cycle_pause"?"⏸ PAUSE（10秒以内に判定・処置・交代）":c.status;
-  document.getElementById('cpr').innerHTML=`<div style="display:flex;flex-direction:column;height:100dvh;overflow:hidden">
+  document.getElementById('cpr').innerHTML=`<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
     <div class="monitor">
       <div class="topbar"><span>🔴 CPR/ALS・RECOVER2024　経過 ${fmt(c.totalSec)}</span><span>${c.m.species==="cat"?"🐱":"🐕"} ${c.m.weightKg}kg</span></div>
       <div style="display:flex;gap:8px;margin-top:6px">
@@ -1208,11 +1214,11 @@ function renderCPR(){
         <div class="vit" style="flex:1"><div class="lab">ETCO₂</div><div style="font-weight:800;font-size:15px;color:#5fd0ff">${et}</div></div>
         <div class="vit" style="flex:1"><div class="lab">経路 / ECG</div><div style="font-weight:800;font-size:13px">${c.access==="none"?"未確保":c.access.toUpperCase()} / ${c.mon.ecg?"装着":"なし"}</div></div>
       </div>
-      <canvas id="cprecg" width="600" height="56" style="height:46px;margin-top:6px;background:#03100a;border:1px solid #10341f;border-radius:8px"></canvas>
+      <canvas id="cprecg" width="600" height="104" style="height:84px;margin-top:6px;background:#03100a;border:1px solid #10341f;border-radius:8px"></canvas>
     </div>
     <div class="body" style="flex:1;overflow:auto">
       <div class="card" style="text-align:center;border-color:${pause?'#6b561d':'#6b2330'}"><b style="color:${pause?'var(--amber)':'var(--red)'}">${statusTxt}</b>
-        <div class="tiny" style="margin-top:2px">推定原因：${causeLabel(c.m.cause)}${c.m.iatrogenic?'（医原性）':''}${REVERSIBLE_CAUSES.includes(c.m.cause)?'・可逆的→原因治療を':''}</div>
+        <div class="tiny" style="margin-top:2px">${c.flags.has('cause')?('推定原因：'+causeLabel(c.m.cause)+(c.m.iatrogenic?'（医原性）':'')+(REVERSIBLE_CAUSES.includes(c.m.cause)?'・可逆的→原因治療を':'')):'推定原因：未検索（「原因検索」で評価）'}</div>
         <div class="tiny" style="margin-top:2px">中断 ${Math.round(c.q.handsOff)}秒　/　圧迫 ${c.q.compStarted?(c.q.rate+"/分・"+(c.q.depth==="adequate"?"適深":"浅い")+(c.q.recoil?"・リコイル可":"")):"未開始"}　/　換気 ${c.q.ventStarted?(c.q.intubated?(c.q.ventRate+"回/分(挿管)"):"BMV"):"なし"}</div></div>
 
       <div class="sub" style="margin:4px 2px">① 初期評価</div>
@@ -1224,7 +1230,8 @@ function renderCPR(){
       <div class="sub" style="margin:4px 2px">③ ALS（pauseで判定・除細動・薬剤）</div>
       ${btnG(cb("cprAttachECG()","ECG装着",c.mon.ecg)+cb("cprAttachEtco2()","ETCO₂装着",c.mon.etco2)+cb("cprIV()","IV確保",c.access==='iv')+cb("cprIO()","IO確保",c.access==='io')+cb("cprAssess()","リズム判定",c.rhythm!=='unknown')+cb("cprDefibModal()","除細動",false)+cb("cprDrugModal()","薬剤投与",false)+cb("cprLytes()","K/Ca確認",c.mon.lytes))}
 
-      ${causeTreatments(c.m.cause).length?`<div class="sub" style="margin:4px 2px">⑤ 可逆的原因の治療（${causeLabel(c.m.cause)}）</div>`
+      ${!c.flags.has('cause')&&causeTreatments(c.m.cause).length?`<div class="sub" style="margin:4px 2px">⑤ 可逆的原因の治療</div><div class="card"><div class="tiny" style="text-align:center">「原因検索」を実施すると、可逆的原因への治療が表示されます。</div></div>`:''}
+      ${c.flags.has('cause')&&causeTreatments(c.m.cause).length?`<div class="sub" style="margin:4px 2px">⑤ 可逆的原因の治療（${causeLabel(c.m.cause)}）</div>`
         +btnG(causeTreatments(c.m.cause).map(t=>cb("cprCauseRx('"+t[0]+"')",t[1],c.flags.has("ct_"+t[0]))).join('')+(causeTreatments(c.m.cause).length%2?'<div></div>':'')):''}
 
       <div class="sub" style="margin:4px 2px">⑥ サイクル / 判定</div>
@@ -1239,21 +1246,42 @@ function renderCPR(){
   </div>`;
 }
 function cprLoop(){ const cv=document.getElementById('cprecg'); if(!cv||!S.cpr){cprRaf=requestAnimationFrame(cprLoop);return;}
-  const ctx=cv.getContext('2d'),W=cv.width,H=cv.height; ctx.fillStyle="#03100a";ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle="#0c2a1a";ctx.lineWidth=1; for(let x=0;x<W;x+=18){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-  if(!S.cpr._b){S.cpr._b=new Array(W).fill(H/2);S.cpr._x=0;S.cpr._ph=0;}
-  const c=S.cpr, rhythmShown=c.rhythm!=="unknown";
-  for(let s=0;s<4;s++){ c._x=(c._x+1)%W; let y=H/2;
-    if(c.status==="rosc"||c.rhythm==="organized_with_pulse"||c.rhythm==="rosc"){ c._ph+=1/40;if(c._ph>=1)c._ph-=1; y=H/2-ecgSample(c._ph)*H*0.4; }
-    else if(rhythmShown&&c.rhythm==="vf"){ y=H/2+(Math.sin(c._x*0.7)+Math.sin(c._x*1.9))*H*0.18+(Math.random()-0.5)*4; }
-    else if(rhythmShown&&c.rhythm==="pea"){ c._ph+=1/55;if(c._ph>=1)c._ph-=1; y=H/2-ecgSample(c._ph)*H*0.3; }
-    else if(rhythmShown&&c.rhythm==="asystole"){ y=H/2+(Math.random()-0.5)*2; }
-    else if(c.q.compStarted&&c.status==="bls_active"){ y=H/2 - Math.max(0,Math.sin(c._x*0.5))*H*0.28; } // 圧迫アーチファクト
-    else { y=H/2+(Math.random()-0.5)*2; }
+  const ctx=cv.getContext('2d'),W=cv.width,H=cv.height,LH=H/2;
+  ctx.fillStyle="#03100a";ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="#0c2a1a";ctx.lineWidth=1;
+  for(let x=0;x<W;x+=18){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  ctx.beginPath();ctx.moveTo(0,LH);ctx.lineTo(W,LH);ctx.stroke(); // 2レーン分割線
+  const c=S.cpr;
+  if(!c._b){c._b=new Array(W).fill(LH*0.5);c._cap=new Array(W).fill(LH*1.92);c._x=0;c._ph=0;c._cp=0;}
+  const compressing = c.q.compStarted && c.status==="bls_active"; // 圧迫実施中か
+  const rhythmShown = c.rhythm!=="unknown";
+  const ec = c.mon.etco2 ? (c.mon.etco2v||8) : 0;
+  const bw = Math.max(40,Math.round(W/6)); // 換気1呼吸の幅
+  for(let s=0;s<4;s++){ c._x=(c._x+1)%W;
+    // ECGレーン（上半分・中心 LH*0.5）
+    let y=LH*0.5;
+    if(c.status==="rosc"||c.rhythm==="organized_with_pulse"||c.rhythm==="rosc"){ c._ph+=1/40;if(c._ph>=1)c._ph-=1; y=LH*0.5-ecgSample(c._ph)*LH*0.42; }
+    else if(compressing){ c._cp+=0.17; y=LH*0.5 - Math.max(0,Math.sin(c._cp))*LH*0.46 - (Math.random()-0.5)*2; } // 圧迫アーチファクト（常に動く）
+    else if(rhythmShown&&c.rhythm==="vf"){ y=LH*0.5+(Math.sin(c._x*0.7)+Math.sin(c._x*1.9))*LH*0.2+(Math.random()-0.5)*4; }
+    else if(rhythmShown&&c.rhythm==="pea"){ c._ph+=1/55;if(c._ph>=1)c._ph-=1; y=LH*0.5-ecgSample(c._ph)*LH*0.3; }
+    else { y=LH*0.5+(Math.random()-0.5)*2; } // asystole / 判定前は平坦
     c._b[c._x]=y; for(let k=1;k<5;k++)c._b[(c._x+k)%W]=null;
+    // ETCO₂カプノグラフ（下半分・ベースライン LH*1.92）
+    let cy=LH*1.92;
+    if(c.mon.etco2 && (compressing||c.q.ventStarted)){
+      const amp=(Math.min(45,Math.max(4,ec))/45)*LH*0.78;
+      const ph=(c._x%bw)/bw;
+      const plat = ph<0.18? ph/0.18 : ph>0.82? Math.max(0,(1-(ph-0.82)/0.18)) : 1;
+      cy = LH*1.92 - amp*plat;
+    }
+    c._cap[c._x]=cy; for(let k=1;k<5;k++)c._cap[(c._x+k)%W]=null;
   }
-  ctx.strokeStyle="#37e08a";ctx.lineWidth=2;ctx.beginPath();let st=false;
+  ctx.strokeStyle=compressing?"#37e08a":"#2aa86a";ctx.lineWidth=2;ctx.beginPath();let st=false;
   for(let x=0;x<W;x++){const y=c._b[(c._x+1+x)%W];if(y==null){st=false;continue;}if(!st){ctx.moveTo(x,y);st=true;}else ctx.lineTo(x,y);} ctx.stroke();
+  ctx.strokeStyle="#5fd0ff";ctx.lineWidth=2;ctx.beginPath();st=false;
+  for(let x=0;x<W;x++){const y=c._cap[(c._x+1+x)%W];if(y==null){st=false;continue;}if(!st){ctx.moveTo(x,y);st=true;}else ctx.lineTo(x,y);} ctx.stroke();
+  ctx.fillStyle=compressing?"#37e08a":"#2a6b4a";ctx.font="10px ui-monospace";ctx.fillText("ECG"+(compressing?"  ● 圧迫中":"  （圧迫停止中）"),5,12);
+  ctx.fillStyle="#3f9ec4";ctx.fillText("ETCO₂"+(c.mon.etco2?("  "+Math.round(ec)+" mmHg"):"  未装着"),5,LH+13);
   cprRaf=requestAnimationFrame(cprLoop);
 }
 

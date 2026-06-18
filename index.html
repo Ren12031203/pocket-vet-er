@@ -658,19 +658,152 @@ const CASES = {
       ct:{text:"CT：外科疾患なし。副腎小型傾向。",s:-10,time:600,abn:false,tag:"harmful",verdict:"循環虚脱の患者でCTは不適切。まず輸液蘇生・電解質/血糖・心筋保護を。"}},
     finalNote:"急性嘔吐下痢＋虚弱で来院した若い犬。重度低Na/高K（Na:K比著明低下）・低血糖・腎前性高窒素血症・代謝性アシドーシス、そして低血圧に対する相対的徐脈が副腎クリーゼの手がかり。最優先は静脈路＋晶質液による循環補正（Na補正速度に注意）と低血糖補正。徐脈＋ECG変化を伴う高Kにはグルコン酸Caで心筋保護（Kは下げない）。低血糖があるためインスリン単独は禁忌。ステロイドは可能なら採血後、救急ではデキサメタゾン。確定後にDOCP/長期管理へ。胃腸炎として帰宅は致命的。",
   },
+
+  // ===== F) 急性胃腸炎（嘔吐下痢ファミリーの良性variant） =====
+  dog_gastroenteritis:{
+    id:"dog_gastroenteritis", icon:"🐕", title:"嘔吐下痢の犬（急性胃腸炎）", level:"★★☆", patient:"dog",
+    signalment:"犬 5歳 去勢雄 柴 12kg", open:"昨日から数回の嘔吐と軟便。今日はやや元気がない。",
+    hidden:{HR:110,SBP:112,SpO2:98,RR:28,temp:38.9},
+    labs0:{K:4.3,Na:145,Cl:108,iCa:1.3,BUN:28,Cre:1.2,Glu:96,pH:7.36,HCO3:20,PCV:50,TP:7.4,lactate:1.8},
+    physiology(S){ const f=S.flags.has("fluids")||S.flags.has("bolus");
+      S.h.SBP+=(((f?116:108))-S.h.SBP)*0.06; S.h.HR+=(((f?96:110))-S.h.HR)*0.08; if(f)S.h.PCV=Math.max(44,S.h.PCV-0.1); S.h.SpO2+=((98)-S.h.SpO2)*0.2; },
+    dz:["gastroenteritis","mild_dehydration"],
+    correctDx:["dx_hge"], primaryDx:"dx_hge", correctDispo:["do_out","do_admit"],
+    res:{
+      hx_cc:{text:"昨日から嘔吐・軟便。今日はやや元気がない。",s:2,time:30},
+      hx_onset:{text:"昨日からの急性発症。これまで健康。",s:2,time:30,tag:"good"},
+      hx_appetite:{text:"嘔吐は3回ほど（食物様）、軟便。血便はない。食欲は低下するが水は飲む。",s:2,time:30},
+      hx_tox:{text:"誤食の心当たりはなく、拾い食いの癖もない。",s:4,time:30,flag:["no_fb_history"],tag:"good"},
+      hx_vacc:{text:"ワクチンは毎年接種済み。",s:2,time:30,tag:"good"},
+      hx_pmh:{text:"持病なし。",s:1,time:30},
+      ex_general:{text:"軽度元気消失だが反応は良好。",s:2,time:60,tag:"good"},
+      ex_hydration:{text:"軽度脱水（5%程度）。",s:2,time:60},
+      ex_mm:{text:"粘膜ピンク、CRT 1.5秒。",s:2,time:60,tag:"good"},
+      ex_abd:{text:"腹部は軽度の不快感のみ。強い限局痛・腫瘤・膨満はない。",s:4,time:60,flag:["abd_benign"],tag:"critical",critLabel:"腹部触診で外科腹症を除外",miss:-10},
+      ex_pulse:{text:"末梢動脈良好。軽度頻脈で、低血圧/相対的徐脈はない。",s:3,time:60,tag:"good"},
+      ex_temp:{text:"直腸温 38.9℃（軽度上昇）。",s:1,time:60,reveal:["temp"]},
+      monitor:{text:"モニター装着。概ね安定。",s:1,time:30,reveal:["HR","SBP","SpO2","RR"]},
+      ivc:{text:"静脈路を確保。",s:3,time:60,flag:["iv"],tag:"good"},
+      fluids:{text:"晶質液で脱水・循環を補正。",s:5,time:30,tag:"critical",critLabel:"輸液で補正",miss:-8},
+      d_maropit:{text:"マロピタントで制吐。",s:4,time:60,tag:"good"},
+      d_metoclo:{text:"メトクロプラミドで制吐。",s:2,time:60},
+      l_lyte:{text:"",s:4,time:120,flag:["lyte_known"],tag:"good"},
+      l_glu:{text:"",s:2,time:120,tag:"good"},
+      l_chem:{text:"",s:3,time:120,tag:"good"},
+      l_pcvtp:{text:"",s:2,time:120,tag:"good"},
+      l_cbc:{text:"軽度の血液濃縮以外に著明な異常なし。白血球は概ね正常。",s:3,time:120,tag:"good",norm:true},
+      l_abd:{text:"腹部X線：閉塞像・異物・遊離ガス・腹水なし。腸管ガスは軽度。",s:2,time:180,flag:["no_obstruction"],tag:"good",norm:true},
+      l_us:{text:"腹部超音波：閉塞・異物・膵腫大・腹腔内出血なし。腸管運動は保たれる。",s:3,time:180,flag:["no_obstruction"],tag:"good",norm:true},
+    },
+    truthImg:{region:"abdomen", text:"閉塞・異物・膵異常・腹腔内出血は認めない。",
+      ct:{text:"CT：明らかな外科疾患・閉塞なし。",s:-8,time:600,abn:false,tag:"harmful",verdict:"軽症の急性胃腸炎にCTは過剰。支持療法と経過観察で十分。"}},
+    finalNote:"バイタル比較的安定・軽度脱水・腹部に外科腹症なし・電解質や画像に大きな異常なし＝急性（非特異的）胃腸炎。輸液と制吐で十分で、過剰な高額検査や緊急手術は不要。ただし『胃腸炎に見える重篤疾患』（アジソン・異物・膵炎・中毒）を、問診（誤食歴・ストレス・ワクチン）と身体検査（相対的徐脈・腹痛・腹部腫瘤）、電解質・血糖で確実に除外することが重要。",
+  },
+
+  // ===== G) 消化管異物（嘔吐下痢ファミリー） =====
+  dog_gi_fb:{
+    id:"dog_gi_fb", icon:"🦴", title:"嘔吐の犬（消化管異物）", level:"★★★", patient:"dog",
+    signalment:"犬 2歳 去勢雄 ラブラドール 28kg", open:"昨日から繰り返す嘔吐。今日はぐったり。",
+    hidden:{HR:120,SBP:96,SpO2:98,RR:30,temp:38.6},
+    labs0:{K:3.6,Na:142,Cl:98,iCa:1.25,BUN:32,Cre:1.3,Glu:104,pH:7.48,HCO3:28,PCV:52,TP:7.6,lactate:2.2},
+    physiology(S){ const f=S.flags.has("fluids")||S.flags.has("bolus"); const rm=S.flags.has("p_surgery");
+      S.h.SBP+=(((f?108:90))-S.h.SBP)*0.07; S.h.HR+=(((f?108:120))-S.h.HR)*0.08;
+      if(!rm)S.h.lactate+=0.004; else S.h.lactate-=0.02; S.h.lactate=clamp(S.h.lactate,1,8);
+      if(f)S.h.K=Math.min(4.2,S.h.K+0.01); S.h.SpO2+=((98)-S.h.SpO2)*0.2; },
+    dz:["gi_obstruction","dehydration"],
+    correctDx:["dx_fb"], primaryDx:"dx_fb", correctDispo:["do_surgery","do_admit"],
+    res:{
+      hx_cc:{text:"昨日から何度も嘔吐。今日はぐったり。",s:2,time:30},
+      hx_appetite:{text:"嘔吐は1日に何度も（食べてもすぐ吐く、最近は黄色い液体）。便はここ1日ほど出ていない。",s:4,time:30,tag:"good"},
+      hx_tox:{text:"靴下やおもちゃをかじる癖があり、数日前に布製のおもちゃが見当たらなくなった。",s:8,time:30,flag:["fb_history"],tag:"critical",critLabel:"誤食歴の聴取",miss:-14},
+      hx_onset:{text:"昨日からの急性発症で嘔吐が反復・増悪。",s:2,time:30,tag:"good"},
+      ex_general:{text:"沈鬱、ぐったり。",s:1,time:60},
+      ex_abd:{text:"中腹部に疼痛と、索状〜塊状の構造物を触知する。",s:8,time:60,flag:["abd_mass"],tag:"critical",critLabel:"腹部触診で異物/閉塞を疑う",miss:-14},
+      ex_mm:{text:"粘膜ややドライ、CRT 2秒。",s:2,time:60},
+      ex_hydration:{text:"中等度脱水。",s:2,time:60,tag:"good"},
+      ex_temp:{text:"直腸温 38.6℃。",s:0,time:60,reveal:["temp"]},
+      monitor:{text:"モニター装着。頻脈。",s:1,time:30,reveal:["HR","SBP","SpO2","RR"]},
+      ivc:{text:"静脈路を確保。",s:4,time:60,flag:["iv"],tag:"good"},
+      fluids:{text:"晶質液で脱水・電解質を補正。",s:5,time:30,tag:"good"},
+      bolus:{text:"晶質液ボーラスで循環補正。",s:3,time:30,tag:"good"},
+      d_maropit:{text:"マロピタントで制吐（閉塞では原因治療が優先）。",s:2,time:60},
+      l_lyte:{text:"",s:4,time:120,flag:["lyte_known"],tag:"good"},
+      l_gas:{text:"",s:3,time:120,tag:"good"},
+      l_abd:{text:"腹部X線：限局性の腸管拡張とガス/液体貯留、異物様の不透過構造。機械的閉塞を示唆。",s:9,time:180,reveal:["xray"],flag:["obstruction_seen"],tag:"critical",critLabel:"画像で閉塞/異物を確認",miss:-14},
+      l_us:{text:"腹部超音波：拡張腸管と内腔の異物様構造、口側の蠕動亢進。閉塞を支持。",s:7,time:180,flag:["obstruction_seen"],tag:"good"},
+      p_ogtube:{text:"胃管を試みたが、閉塞部位により減圧/除去は限定的。",s:1,time:120},
+      p_surgery:{text:"開腹（または内視鏡）で異物を摘出した。根治治療。術後は再灌流・腸管生存性・腹膜炎・AKIを評価。",s:10,time:600,tag:"critical",critLabel:"異物除去（手術/内視鏡）",miss:-20,need:[{f:["iv"],pen:-6,msg:"麻酔導入前に静脈路を。"}]},
+    },
+    truthImg:{region:"abdomen", text:"腸管の機械的閉塞と異物様構造を認める。",
+      ct:{text:"CT：腸管内の異物と口側腸管拡張を明瞭に確認。X線/エコー所見と整合。",s:-4,time:600,abn:true,tag:"harmful",verdict:"所見は得られるが、X線/エコーで診断可能な不安定例でCTを優先する必要性は乏しい。"}},
+    finalNote:"若く拾い食い癖のある犬の反復嘔吐＋排便停止＋腹部腫瘤/疼痛は消化管異物（機械的閉塞）を疑う。嘔吐で低K・代謝性アルカローシスになりやすい。誤食歴の聴取と腹部触診・腹部X線/エコーが診断の鍵。輸液で安定化し、異物除去（手術/内視鏡）が根治。単なる胃腸炎として制吐のみで帰宅させると閉塞・腸管壊死・穿孔のリスク。",
+  },
+
+  // ===== H) 膵炎（嘔吐下痢ファミリー） =====
+  dog_pancreatitis:{
+    id:"dog_pancreatitis", icon:"🐩", title:"嘔吐と腹痛の犬（膵炎）", level:"★★★", patient:"dog",
+    signalment:"犬 8歳 避妊雌 ミニチュアシュナウザー 9kg", open:"昨日から嘔吐と元気消失。お腹を痛がる。",
+    hidden:{HR:120,SBP:100,SpO2:98,RR:30,temp:39.3},
+    labs0:{K:4.0,Na:143,Cl:105,iCa:1.15,BUN:32,Cre:1.4,Glu:132,pH:7.34,HCO3:18,PCV:48,TP:7.0,lactate:2.4},
+    physiology(S){ const f=S.flags.has("fluids")||S.flags.has("bolus");
+      S.h.SBP+=(((f?110:94))-S.h.SBP)*0.06; S.h.HR+=(((f?104:120))-S.h.HR)*0.08; S.h.SpO2+=((98)-S.h.SpO2)*0.2; },
+    dz:["pancreatitis","dehydration"],
+    correctDx:["dx_pancreatitis"], primaryDx:"dx_pancreatitis", correctDispo:["do_admit","do_icu"],
+    res:{
+      hx_cc:{text:"昨日から嘔吐と元気消失。お腹を痛がる。",s:2,time:30},
+      hx_appetite:{text:"嘔吐が続き、食欲は廃絶。下痢は軽度。",s:2,time:30},
+      hx_diet:{text:"昨日、人の脂っこい食事（揚げ物）を大量に食べてしまった。",s:6,time:30,flag:["dietary_indiscretion"],tag:"good"},
+      hx_tox:{text:"明らかな異物誤食はない。",s:1,time:30},
+      ex_general:{text:"沈鬱。",s:1,time:60},
+      ex_abd:{text:"前腹部に強い疼痛。祈りのポーズ（prayer position）をとる。腫瘤・鼓音は明らかでない。",s:8,time:60,flag:["cranial_abd_pain"],tag:"critical",critLabel:"腹部触診で前腹部痛を確認",miss:-14},
+      ex_mm:{text:"粘膜ピンク〜やや充血、CRT 2秒。",s:2,time:60},
+      ex_hydration:{text:"中等度脱水。",s:2,time:60,tag:"good"},
+      ex_temp:{text:"直腸温 39.3℃（発熱）。",s:2,time:60,reveal:["temp"],tag:"good"},
+      monitor:{text:"モニター装着。頻脈。",s:1,time:30,reveal:["HR","SBP","SpO2","RR"]},
+      ivc:{text:"静脈路を確保。",s:4,time:60,flag:["iv"],tag:"good"},
+      fluids:{text:"晶質液で循環・脱水を補正（膵炎管理の柱）。",s:6,time:30,tag:"critical",critLabel:"輸液で補正",miss:-12},
+      bolus:{text:"晶質液ボーラスで循環補正。",s:3,time:30,tag:"good"},
+      d_maropit:{text:"マロピタントで制吐。膵炎の支持療法として適切。",s:4,time:60,tag:"good"},
+      d_buprenor:{text:"ブプレノルフィンで鎮痛。腹痛管理として重要。",s:5,time:60,tag:"good"},
+      d_methadone:{text:"メサドンで鎮痛。",s:4,time:60,tag:"good"},
+      l_cbc:{text:"白血球増多（炎症像）、軽度血液濃縮。",s:5,time:120,flag:["inflammation"],tag:"good"},
+      l_chem:{text:"",s:4,time:120,tag:"good"},
+      l_lyte:{text:"",s:3,time:120,flag:["lyte_known"],tag:"good"},
+      l_snap:{text:"膵特異的リパーゼ（cPL）SNAP：陽性。",s:8,time:120,flag:["cpl_pos"],tag:"critical",critLabel:"膵特異的リパーゼ(cPL)等の評価",miss:-12},
+      l_us:{text:"腹部超音波：膵の腫大・低エコー化と膵周囲の高エコー脂肪、少量の腹水。",s:8,time:180,flag:["panc_us"],tag:"critical",critLabel:"超音波で膵所見を確認",miss:-12},
+      l_abd:{text:"腹部X線：右前腹部のディテール低下（すりガラス様）。非特異的。閉塞像なし。",s:3,time:180,tag:"good"},
+    },
+    truthImg:{region:"abdomen", text:"膵の腫大・膵周囲の炎症性変化を認める。閉塞や外科腹症はない。",
+      ct:{text:"CT：膵腫大と膵周囲脂肪織の濃度上昇、少量腹水。膵炎に合致。",s:-4,time:600,abn:true,tag:"harmful",verdict:"所見は得られるが、超音波で評価可能なため通常CTは不要。"}},
+    finalNote:"高脂肪食の不摂生＋前腹部痛（prayer position）＋発熱＋炎症像から急性膵炎を疑う。診断は病歴・身体検査・cPL・腹部超音波。治療の柱は十分な輸液・制吐・鎮痛で、外科は通常不要。NSAIDは膵炎・脱水で避ける。単なる胃腸炎として鎮痛・輸液をせず帰宅させると重症化しうる。",
+  },
 };
 
 // ---------- 状態・エンジン ----------
 let S=null,timer=null,wf=null,reopen=null,arrestShown=false; const STEP=30;
 
+// ---------- 主訴ファミリー（同じ主訴→ランダムで複数の隠れた診断に分岐） ----------
+const FAMILIES=[
+  {id:"vd_collapse", icon:"🐕", title:"嘔吐・下痢のあとぐったりした犬", level:"★★★",
+   opening:"昨日から嘔吐と下痢。今朝からぐったりして元気がない。飼い主は『胃腸炎かもしれない』と思って来院。",
+   variants:["dog_gastroenteritis","dog_addison_crisis","dog_gi_fb","dog_pancreatitis"]},
+];
+function startFamily(fid){ const f=FAMILIES.find(x=>x.id===fid); if(!f)return;
+  const vid=f.variants[Math.floor(Math.random()*f.variants.length)]; startCase(vid,f); }
 function listCases(){
-  document.getElementById('caseList').innerHTML=Object.values(CASES).map(c=>
+  const inFam=new Set(); FAMILIES.forEach(f=>f.variants.forEach(v=>inFam.add(v)));
+  let html=FAMILIES.map(f=>
+    `<div class="card" onclick="startFamily('${f.id}')" style="cursor:pointer;border-color:#2c5a78">
+       <div style="display:flex;gap:10px;align-items:center"><div style="font-size:28px">${f.icon}</div>
+       <div><b>${f.title}</b><div class="tiny">主訴ファミリー（毎回ランダムで違う診断）／難易度 ${f.level}</div></div></div></div>`).join('');
+  html+=Object.values(CASES).filter(c=>!inFam.has(c.id)).map(c=>
     `<div class="card" onclick="startCase('${c.id}')" style="cursor:pointer">
        <div style="display:flex;gap:10px;align-items:center"><div style="font-size:28px">${c.icon}</div>
-       <div><b>${c.title}</b><div class="tiny">${c.signalment}　/　難易度 ${c.level}</div></div></div></div>`).join('')+
-    `<div class="tiny" style="margin-top:6px">どの症例でもメニューは共通です。</div>`;
+       <div><b>${c.title}</b><div class="tiny">${c.signalment}　/　難易度 ${c.level}</div></div></div></div>`).join('');
+  document.getElementById('caseList').innerHTML=html+
+    `<div class="tiny" style="margin-top:6px">どの症例でもメニューは共通。ファミリーは主訴が同じで、問診・身体検査・検査で診断を見分けます。</div>`;
 }
-function startCase(cid){
+function startCase(cid,fam){
   const C=CASES[cid];
   document.getElementById('start').classList.add('hide');
   document.getElementById('result').classList.add('hide');
@@ -683,8 +816,9 @@ function startCase(cid){
      dz:new Set(C.dz||[]),adverseEvents:[],cpaCtx:null,
      caT:0,stress:0,arrest:false,dead:false,rosc:false,cpr:null,score:0,log:[]};
   arrestShown=false; reopen=null;
+  S.familyId = fam?fam.id:null;
   preApply('monitor'); preApply('ivc');   // モニター・静脈路は最初から装着済み
-  document.getElementById('ccchip').textContent="主訴：「"+C.open+"」";
+  document.getElementById('ccchip').textContent=C.signalment+" ／ 主訴：「"+(fam?fam.opening:C.open)+"」";
   log("搬入。モニター装着・静脈路確保済み。");
   drawRoom(); setupMon(); render();
   if(timer)clearInterval(timer); timer=setInterval(tick,1000);
@@ -751,7 +885,8 @@ function doAction(id){
   }
   const rtext=`${r.text}${(!first&&isLab)?'（再評価）':''}`;
   const _ty=actionType(id);
-  const abn=['hx','exam','lab'].includes(_ty)&&((S.C.res&&S.C.res[id]&&!S.C.res[id].norm)||r.abn===true);
+  const abn = LAB_DEF[id] ? (r.abn===true)  // 数値検査は値ベース（正常値は赤くしない）
+    : (['hx','exam','lab'].includes(_ty)&&((S.C.res&&S.C.res[id]&&!S.C.res[id].norm)||r.abn===true));
   S.results.unshift({id,t:S.t,text:rtext,type:_ty,abn});
   log(`${labelOf(id)}：${rtext}`);
   if(id==="monitor"){ for(const k of ["HR","SBP","SpO2","RR"]) if(S.revealed.has(k))S.disp[k]=S.h[k]; }
@@ -1072,7 +1207,7 @@ function showResult(){
     ${Object.keys(S.labInterps||{}).length?`<div class="card"><div class="sub">📖 検査の読み方（解説）</div><div class="log">${Object.values(S.labInterps).map(t=>`<div class="e">${t}</div>`).join('')}</div></div>`:''}
     <div class="card"><div class="sub">📖 解説</div><p style="margin:6px 0">${C.finalNote}</p>
       <p class="tiny">※用量・手技・実診療判断は最新のガイドライン／添付文書／施設プロトコルで確認してください。</p></div>
-    <button class="btn primary" onclick="startCase('${S.cid}')">▶ もう一度</button>
+    <button class="btn primary" onclick="${S.familyId?`startFamily('${S.familyId}')`:`startCase('${S.cid}')`}">▶ もう一度${S.familyId?'（別の症例になる）':''}</button>
     <button class="btn ghost" style="margin-top:8px" onclick="toStart()">トップへ</button>`;
   window.scrollTo(0,0);
 }

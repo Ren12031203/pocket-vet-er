@@ -311,7 +311,10 @@ function labText(id){
   keys.forEach(a=>{ if(S.h[a]!=null){ S.labTimeline.push({a,v:S.h[a],t:S.t,id}); S.labPrev[a]=S.h[a]; } });
   // 異常の有無で赤字判定用フラグ
   const anyAbn=keys.some(a=>S.h[a]!=null&&flagOf(a,S.h[a]));
-  return {text:parts.join("、")+"。", abn:anyAbn};
+  // 文脈依存の臨床的意味（処置前後で解釈が変わる）
+  let interp=""; const ic=S.C.interp;
+  if(ic){ const seen=new Set(); keys.forEach(a=>{ if(ic[a]&&!seen.has(a)){ const t=ic[a](S); if(t){interp+=" "+t; seen.add(a);} } }); }
+  return {text:parts.join("、")+"。"+interp, abn:anyAbn};
 }
 
 /* ---------- グローバルCPAトリガーエンジン ---------- */
@@ -343,6 +346,17 @@ const CASES = {
     open:"昨日から何度もトイレに行くが尿が出ていない。今朝からぐったりして、下腹部を痛がる。",
     hidden:{HR:96,SBP:88,SpO2:96,RR:40,temp:36.5,K:8.5},
     labs0:{Na:148,Cl:112,iCa:1.05,BUN:86,Cre:6.8,Glu:118,pH:7.18,HCO3:12,PCV:45,TP:7.8,lactate:3.8},
+    interp:{ K:(S)=>{ const relieved=S.flags.has("p_ucath"), decomp=S.flags.has("p_cysto"),
+        ca=S.cflags.has("ca_protect"), ins=S.flags.has("d_dexins")||S.flags.has("d_insulin"); const K=S.h.K;
+      if(relieved){ if(K>=7)return"閉塞解除後もK高値残存：解除不完全・再閉塞・重度AKI・アシドーシス残存を考慮し、ECG/尿量/Cre再評価を。";
+        if(K<3.5)return"閉塞後利尿または治療過剰による低Kの可能性。補正とモニタを。";
+        return"閉塞解除後。閉塞後利尿が起こりうるためK・BUN/Cre・尿量を継続再評価。"; }
+      if(K>=7){ let s="腎後性排泄障害による重度高K血症。ECG・静脈路・グルコン酸Caでの心筋保護・K低下治療・閉塞解除を。";
+        if(ca)s+=" （Caは心筋保護でKは下げない＝評価はECG/HR/T波で。Kが下がらなくても失敗ではない）";
+        if(ins)s+=" インスリンでKを細胞内へ移行中—血糖の再評価を（低血糖リスク）。";
+        if(decomp&&!relieved)s+=" 膀胱穿刺は一時的減圧であり根本治療ではない。尿道カテーテルで閉塞解除を。";
+        return s; }
+      return null; } },
     physiology(S){
       const relieved=S.flags.has("p_ucath"), decomp=S.flags.has("p_cysto");
       if(relieved){ S.h.BUN=Math.max(40,S.h.BUN-0.4); S.h.Cre=Math.max(2.6,S.h.Cre-0.03); } // 閉塞解除後に腎数値が緩徐改善
@@ -415,6 +429,12 @@ const CASES = {
     open:"夕食後に落ち着かず、腹がパンパンに膨れてきた。吐こうとするが何も出ない。",
     hidden:{HR:160,SBP:78,SpO2:95,RR:48,temp:38.2,lactate:6.5},
     labs0:{K:4.2,Na:146,Cl:110,iCa:1.25,BUN:30,Cre:1.4,Glu:120,pH:7.28,HCO3:16,PCV:55,TP:7.8},
+    interp:{ lactate:(S)=>{ const decomp=S.flags.has("p_gastrocen")||S.flags.has("p_ogtube"),
+        resus=S.flags.has("bolus")||S.flags.has("bigbolus")||S.flags.has("fluids"), surg=S.flags.has("p_surgery"); const L=S.h.lactate;
+      if(surg)return L>6?"術後も高乳酸：再灌流障害・胃壁壊死・持続ショック・DIC・敗血症性腹膜炎を考慮し、ECG/凝固/腹水/AKIを評価。":"術後の乳酸は低下傾向。再灌流とショック離脱の指標として継続評価。";
+      if(L>6)return"高乳酸＝ショック/灌流障害。"+(resus?"":"静脈路＋ショックボーラスを。")+(decomp?"":"胃減圧（胃管/経皮穿刺）を。")+"輸液・減圧への反応を再評価。";
+      if(L>2.5)return"乳酸は改善傾向だがまだ高値。減圧・輸液への反応を継続評価し、根治は開腹整復・胃固定。";
+      return"乳酸は概ね正常域。循環は改善傾向。"; } },
     physiology(S){
       const decomp=S.flags.has("p_ogtube")||S.flags.has("p_gastrocen");
       const resus=S.flags.has("bolus")||S.flags.has("bigbolus")||S.flags.has("fluids");

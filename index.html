@@ -465,24 +465,27 @@ const CASES = {
       monitor:{text:"モニターを装着。頻脈。",s:3,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
       o2:{text:"酸素投与を開始。",s:2,time:30},
       ivc:{text:"太い静脈路を確保した（できれば両前肢）。",s:5,time:60,flag:["iv"],tag:"critical",miss:-12},
-      bolus:{text:"晶質液ショックボーラスを開始。循環を補正。",s:7,time:30,tag:"critical",miss:-12,need:[{f:["iv"],pen:-4,msg:"静脈路確保前に輸液を始めようとした。"}]},
+      bolus:{text:"晶質液ショックボーラスを開始。循環を補正。",s:7,time:30,tag:"critical",miss:-12,flag:["resus"],need:[{f:["iv"],pen:-4,msg:"静脈路確保前に輸液を始めようとした。"}]},
       bigbolus:{text:"大量急速輸液を実施。",s:4,time:30,need:[{f:["iv"],pen:-4,msg:"静脈路確保前。"}]},
       fluids:{text:"維持輸液を開始した。",s:2,time:30},
       d_buprenor:{text:"オピオイドで鎮痛した。",s:3,time:60,tag:"good"},
       d_methadone:{text:"メサドンで鎮痛した。",s:3,time:60,tag:"good"},
-      d_lidocaine:{text:"心室性不整脈に対しリドカインを投与した。",s:2,time:60},
+      d_lidocaine:{text:"リドカインを投与した。",s:3,time:60,need:[{f:["vpc_seen"],pen:-6,msg:"心電図でVPC（心室性不整脈）を確認していない。まずECGで適応を確認。"}]},
       l_abd:{text:"右側臥位像で胃の著明な拡張と区画化（ダブルバブル様）。捻転を示唆。",s:8,time:120,reveal:["xray"],tag:"critical",miss:-14},
       l_gas:{text:"代謝性アシドーシス、Lactate 6.5（上昇）。",s:4,time:120,reveal:["lactate"],tag:"good"},
       l_lactate:{s:4,time:60,reveal:["lactate"],tag:"good"},
       l_pcvtp:{text:"PCV 55 / TP 7.8（血液濃縮）。",s:2,time:120},
-      l_ecg:{text:"散発する心室性期外収縮（VPC）。",s:2,time:120},
+      l_ecg:{text:"散発する心室性期外収縮（VPC）。リドカインの適応を評価できる。",s:3,time:120,flag:["vpc_seen"],tag:"good"},
+      l_coag:{text:"凝固系を評価。GDVではDIC傾向に注意（PT/APTT延長・血小板減少）。術後は再評価を。",s:3,time:120,tag:"good"},
       p_gastrocen:{text:"経皮で胃を穿刺・減圧。ガスが抜け腹圧が低下。",s:6,time:120,flag:["decomp"],tag:"good"},
       p_ogtube:{text:"胃管で減圧を試みた（捻転では通過困難なことあり）。",s:5,time:120,flag:["decomp"],tag:"good"},
-      p_surgery:{text:"開腹し整復・胃固定を行った。",s:10,time:600,tag:"critical",miss:-20},
+      p_surgery:{text:"開腹し整復・胃固定（gastropexy）を行った。根治治療。術後は乳酸・ECG/VPC・凝固/DIC・AKI・腹水/腹膜炎・疼痛管理・ICU管理を評価。",s:10,time:600,tag:"critical",miss:-20,flag:["gastropexy"],
+        need:[{f:["iv"],pen:-6,msg:"麻酔導入前に静脈路を確保。"},{f:["resus"],pen:-10,msg:"輸液蘇生なしの麻酔導入は循環虚脱（anesthesia induction collapse）のリスク。"},{f:["decomp"],pen:-6,msg:"術前に胃の減圧を。"}]},
       /* α2作動薬・NSAID・アセプロマジン等は全症例共通の薬剤リスクエンジンが判定 */
     },
     truthImg:{region:"abdomen", text:"胃の著明な拡張を認める。",
       ct:{text:"CT：胃の著明な拡張と捻転を明瞭に確認。腹部X線所見と整合する。",s:-10,time:600,abn:true,tag:"harmful",verdict:"所見は得られるが、緊急減圧・開腹を要する不安定例でCTを優先するのは不適切。"}},
+    recheckGate:"p_surgery", recheckBonus:{l_lactate:5,l_ecg:5,l_coag:5,l_chem:4}, // 術後の再評価で加点
     finalNote:"大型犬の急性腹部膨満＋非生産的嘔吐＋ショックはGDVを最優先。右側臥位X線で胃の区画化を確認。①太い静脈路＋ショックボーラス、②胃の減圧、③鎮痛、④速やかな開腹整復・胃固定。NSAIDや強い鎮静はショックを悪化させ危険。",
   },
   cat_resp:{
@@ -510,10 +513,10 @@ const CASES = {
       ex_mm:{text:"可視粘膜やや チアノーゼ様。",s:2,time:60},
       ex_temp:{text:"直腸温 38.0℃。",s:0,time:60,reveal:["temp"],norm:true},
       l_fast:{text:"TFAST：両側胸腔に無エコー貯留。肺は虚脱。",s:8,time:90,reveal:["fast"],tag:"critical",miss:-12},
-      l_echo:{text:"心エコーで左房拡大、心筋肥厚。胸水あり。",s:5,time:120,tag:"good"},
-      l_thorax:{text:"撮影のため保定した。撮影中に呼吸状態が悪化した。",s:-6,time:120,tag:"harmful",verdict:"呼吸不安定な猫を保定してのX線はストレスで急変を招きうる。先に酸素と最小ハンドリングを。",fx:S=>{S.stress=(S.stress||0)+1;}},
+      l_echo:{text:"心エコー：左房拡大・心筋肥厚を認め、心原性（うっ血性心不全）を支持。胸水あり。",s:5,time:120,flag:["chf_evidence"],tag:"good"},
+      l_thorax:{text:"胸部X線：両側胸腔に軟部組織濃度上昇・肺葉辺縁の後退。胸水を示唆。ただし撮影の保定で呼吸状態が悪化した（検査選択として不適切）。",s:-6,time:120,reveal:["xray"],abn:true,tag:"harmful",verdict:"所見（胸水）は得られるが、呼吸不安定な猫を酸素化前に保定してX線を優先したのは不適切。SpO₂低下・CPAリスク上昇。",fx:S=>{S.stress=(S.stress||0)+1;}},
       d_butorph:{text:"ブトルファノールで軽い鎮静。ストレスと呼吸努力が軽減。",s:4,time:60,tag:"good"},
-      d_furosem:{text:"フロセミドを投与した。",s:4,time:60,tag:"good"},
+      d_furosem:{text:"フロセミドを投与した。",s:5,time:60,tag:"good",contra:[{f:["chf_evidence"],invert:true,pen:-8,msg:"心原性（CHF）の根拠（心エコーでの左房拡大/心筋肥厚等）を確認せずにフロセミド。胸水の原因が非心原性なら脱水を助長しうる。"}]},
       p_thoraco:{text:"胸腔穿刺で胸水を排液。呼吸が明らかに楽になる。",s:10,time:120,reveal:["fast"],tag:"critical",miss:-16},
       p_chesttube:{text:"胸腔ドレーンを留置した。",s:4,time:180,tag:"good"},
       bolus:{text:"晶質液ボーラスを実施した。",s:-10,time:30,tag:"harmful",verdict:"胸水/心原性が疑われる猫への輸液ボーラスは肺水腫・胸水を悪化させる。"},
@@ -743,8 +746,8 @@ function doAction(id){
     S.snap[id]={t:S.t,HR:Math.round(S.h.HR),SBP:Math.round(S.h.SBP),SpO2:Math.round(S.h.SpO2),temp:S.h.temp};
     S.scored.add(id);
   }
-  if(isLab&&C.recheckBonus&&C.recheckBonus[id]&&S.flags.has("p_ucath")&&!S.cflags.has("rk_"+id)){
-    S.cflags.add("rk_"+id); S.score+=C.recheckBonus[id]; logWarn("閉塞解除後の再評価。");
+  if(isLab&&C.recheckBonus&&C.recheckBonus[id]&&S.flags.has(C.recheckGate||"p_ucath")&&!S.cflags.has("rk_"+id)){
+    S.cflags.add("rk_"+id); S.score+=C.recheckBonus[id]; logWarn("根本治療後の再評価（適切）。");
   }
   const rtext=`${r.text}${(!first&&isLab)?'（再評価）':''}`;
   const _ty=actionType(id);

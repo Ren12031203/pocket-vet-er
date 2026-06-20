@@ -210,7 +210,7 @@ const EXAM_GROUPS=[
   {g:"呼吸器", items:[["ex_thorax","肺音聴診"],["ex_effort","呼吸様式"]]},
   {g:"腹部", items:[["ex_abd","腹部触診"]]},
   {g:"泌尿生殖・会陰", items:[["ex_perineum","外陰部・会陰"]]},
-  {g:"四肢・神経", items:[["ex_limb","四肢・疼痛"],["ex_neuro","神経学的"],["ex_spine","脊柱・頸部の触診"]]},
+  {g:"四肢・神経", items:[["ex_limb","四肢・疼痛"],["ex_neuro","神経学的検査（検査表）"],["ex_spine","脊柱・頸部の触診"],["ex_neckrom","頸部可動域（屈曲/伸展）検査"]]},
   {g:"体温", items:[["ex_temp","直腸温"]]},
 ];
 
@@ -791,6 +791,14 @@ const CASES = {
     physiology(S){ S.h.SpO2+=((S.flags.has("o2")?99:97)-S.h.SpO2)*0.2; S.h.SBP+=(115-S.h.SBP)*0.05; S.h.HR+=((S.flags.has("d_methadone")||S.flags.has("d_buprenor")?108:120)-S.h.HR)*0.06; },
     dz:["atlantoaxial_subluxation","cervical_myelopathy"],
     correctDx:["dx_aai"], primaryDx:"dx_aai", correctDispo:["do_refer","do_admit"],
+    neuro:{ loc:"C1-C5", dangerROM:true, reasons:["r_tetra","r_postural","r_reflex_ok","r_cn_ok","r_neckpain"],
+      mental:"正常", posture:"低頭位、頸部を動かしたがらない、座位保持がやや困難", gait:"自力起立困難、四肢の不全麻痺、体幹の動揺", involuntary:"なし",
+      tone:"四肢でやや亢進", spinalPain:"頸部に軽く触れると疼痛反応。可動域検査は危険と判断し実施せず（NE）。",
+      proprio:{LF:1,RF:1,LR:1,RR:1}, placing:{LF:1,RF:1,LR:1,RR:1}, hopping:{LF:1,RF:1,LR:1,RR:1},
+      patellar:{LR:3,RR:3}, withdrawal:{LF:2,RF:2,LR:2,RR:2}, perineal:2, panniculus:{L:2,R:2},
+      cn:"明らかな異常なし（威嚇・眼瞼・対光反射・対称性いずれも正常、眼振なし）",
+      superficial:{LF:2,RF:2,LR:2,RR:2}, deep:{LF:2,RF:2,LR:2,RR:2}, hyperesthesia:"頸部に過敏あり",
+      urination:"随意排尿あり", bladder:"正常" },
     res:{
       hx_cc:{text:"今朝、ソファから飛び降りた直後に首をすくめてキャンと鳴き、以後動きたがらない。",s:2,time:30},
       hx_onset:{text:"生後8か月。これまで健康だが、ここ数週は時々頭を低くして痛がる素振りがあった。今回は急性に増悪。",s:4,time:30,flag:["young_onset"],tag:"good"},
@@ -800,7 +808,8 @@ const CASES = {
       hx_fever:{text:"熱っぽさは感じておらず、食欲もいつも通り。元気はあるが痛みで動きたがらない。",s:3,time:30,flag:["no_fever_hx"],tag:"good"},
       ex_general:{text:"意識は清明だが、頭頸部を低く硬く保持し痛がる。",s:2,time:60,tag:"good"},
       ex_spine:{text:"頸部（頭側寄り）に強い痛み。触ると嫌がる。操作は最小限にし、愛護的に扱う。",s:8,time:60,flag:["cervical_pain"],tag:"critical",critLabel:"頸部痛の局在を慎重に評価",miss:-12},
-      ex_neuro:{text:"四肢に軽度の不全麻痺と、足を返したときの戻りの遅れ（固有受容の低下）を認める。脳神経は正常。",s:8,time:60,flag:["umn_tetra"],tag:"critical",critLabel:"神経学的に病変高位を評価",miss:-10},
+      ex_neuro:{text:"神経学的検査を実施。客観所見を検査表に記録した（局在は別ステップで解釈）。",s:8,time:120,flag:["umn_tetra"],tag:"critical",critLabel:"神経学的検査で客観データを取得",miss:-10},
+      ex_neckrom:{text:"頸部を屈曲・伸展させて可動域を確認しようとした。",s:-20,time:60,tag:"harmful",verdict:"環軸が不安定な状況で頸部を屈曲/過伸展させると脊髄を損傷し、神経症状の悪化・呼吸停止を招きうる。可動域検査は実施せず（NE）が正解。",fx:S=>{S.h.RR=Math.max(10,S.h.RR-4);S.adverseEvents.push({id:"ex_neckrom",score:-20,msg:"頸部の屈曲操作で脊髄損傷を悪化させた。"});}},
       ex_posture:{text:"頭頸部を低く保持し、抱き上げると痛がる。",s:2,time:60,tag:"good"},
       ex_tpr:{text:"",s:2,time:60},
       monitor:{text:"モニター装着。概ね安定。呼吸数も継続して観察する。",s:2,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
@@ -833,6 +842,13 @@ const CASES = {
     physiology(S){ S.h.SpO2+=((S.flags.has("o2")?99:98)-S.h.SpO2)*0.2; S.h.HR+=((S.flags.has("d_methadone")||S.flags.has("d_buprenor")?98:110)-S.h.HR)*0.06; },
     dz:["cervical_ivdd","hansen_type1"],
     correctDx:["dx_civdd"], primaryDx:"dx_civdd", correctDispo:["do_admit","do_refer"],
+    neuro:{ loc:"C1-C5", dangerROM:true, reasons:["r_tetra","r_postural","r_reflex_ok","r_cn_ok","r_neckpain"],
+      mental:"正常", posture:"低頭位、頸部をすくめる", gait:"歩行は可能だが軽度のふらつき、四肢の軽度不全麻痺", involuntary:"なし",
+      tone:"四肢で正常〜やや亢進", spinalPain:"頸部の触診で疼痛反応（やや限局）。",
+      proprio:{LF:1,RF:1,LR:1,RR:1}, placing:{LF:1,RF:2,LR:1,RR:2}, hopping:{LF:1,RF:1,LR:1,RR:1},
+      patellar:{LR:2,RR:2}, withdrawal:{LF:2,RF:2,LR:2,RR:2}, perineal:2, panniculus:{L:2,R:2},
+      cn:"明らかな異常なし", superficial:{LF:2,RF:2,LR:2,RR:2}, deep:{LF:2,RF:2,LR:2,RR:2}, hyperesthesia:"頸部に過敏あり",
+      urination:"随意排尿あり", bladder:"正常" },
     res:{
       hx_cc:{text:"数日前から首をすくめて痛がり、今朝から強くなった。",s:2,time:30},
       hx_onset:{text:"急性〜亜急性で非進行性。これまでにも背中を痛がるエピソードがあった。",s:4,time:30,flag:["episodic"],tag:"good"},
@@ -842,7 +858,8 @@ const CASES = {
       hx_trigger:{text:"明らかな外傷やきっかけははっきりしない。",s:2,time:30,flag:["no_trauma_hx"],tag:"good"},
       ex_general:{text:"意識清明。低頭位で首をすくめている。",s:2,time:60,tag:"good"},
       ex_spine:{text:"頸部痛が著明。水平頸位で、側方を見るのを嫌い体ごと向く。",s:8,time:60,flag:["cervical_pain"],tag:"critical",critLabel:"頸部痛の評価",miss:-12},
-      ex_neuro:{text:"歩行は可能だが、ときどきふらつき、足の戻りがやや遅い。痛覚は保たれる。",s:7,time:60,flag:["mild_deficit"],tag:"critical",critLabel:"神経学的に重症度を評価",miss:-10},
+      ex_neuro:{text:"神経学的検査を実施。客観所見を検査表に記録した（局在は別ステップで解釈）。",s:7,time:120,flag:["mild_deficit"],tag:"critical",critLabel:"神経学的検査で客観データを取得",miss:-10},
+      ex_neckrom:{text:"頸部を屈曲・伸展させて可動域を確認しようとした。強い痛みで抵抗する。",s:-8,time:60,tag:"harmful",verdict:"脊髄圧迫を疑う頸部痛例での無理な可動域検査は症状を悪化させうる。診断は画像で行い、可動域検査は避ける。"},
       ex_posture:{text:"頸部を硬く保持し、頭を下げている。",s:2,time:60,tag:"good"},
       ex_tpr:{text:"",s:1,time:60},
       monitor:{text:"モニター装着。概ね安定。",s:1,time:30,reveal:["HR","SBP","SpO2","RR"]},
@@ -875,6 +892,13 @@ const CASES = {
       if(f)S.h.lactate-=0.02; else S.h.lactate+=0.004; S.h.lactate=clamp(S.h.lactate,1,8); },
     dz:["cervical_fracture","spinal_trauma","hypovolemia"],
     correctDx:["dx_cfx"], primaryDx:"dx_cfx", correctDispo:["do_icu","do_refer","do_surgery"],
+    neuro:{ loc:"C1-C5", dangerROM:true, reasons:["r_tetra","r_postural","r_reflex_ok","r_cn_ok","r_neckpain"],
+      mental:"正常〜やや沈鬱", posture:"横臥、自力で起き上がれない", gait:"自力起立不能、四肢の麻痺", involuntary:"なし",
+      tone:"四肢で亢進", spinalPain:"頸部に強い疼痛と不安定感。可動域検査は危険と判断し実施せず（NE）。脊椎は中立で保持。",
+      proprio:{LF:0,RF:0,LR:0,RR:0}, placing:{LF:0,RF:0,LR:0,RR:0}, hopping:{LF:1,RF:1,LR:1,RR:1},
+      patellar:{LR:3,RR:3}, withdrawal:{LF:2,RF:2,LR:2,RR:2}, perineal:2, panniculus:{L:2,R:2},
+      cn:"明らかな異常なし", superficial:{LF:2,RF:2,LR:2,RR:2}, deep:{LF:2,RF:2,LR:2,RR:2}, hyperesthesia:"頸部に過敏あり",
+      urination:"随意排尿あり", bladder:"正常" },
     res:{
       hx_cc:{text:"30分前に車に接触。直後から首を痛がり、起立できない。",s:2,time:30},
       hx_tox:{text:"交通事故（自動車との接触）を飼い主が目撃。",s:6,time:30,flag:["trauma_history"],tag:"critical",critLabel:"外傷歴の聴取",miss:-12},
@@ -884,7 +908,8 @@ const CASES = {
       ex_general:{text:"沈鬱で疼痛。体表に擦過傷。",s:2,time:60,tag:"good"},
       ex_mm:{text:"粘膜やや蒼白、CRT 2秒（軽度ショック）。",s:3,time:60,tag:"good"},
       ex_spine:{text:"頸部に強い疼痛と不安定感。※脊椎を動かさないよう中立で固定しながら評価する。",s:8,time:60,flag:["cervical_pain"],tag:"critical",critLabel:"頸部痛/不安定の評価（不動化下で）",miss:-12},
-      ex_neuro:{text:"四肢に力が入らず麻痺している。深部痛覚は保たれる。呼吸は浅め。",s:7,time:60,flag:["umn_tetra"],tag:"critical",critLabel:"神経学的に重症度を評価",miss:-10},
+      ex_neuro:{text:"神経学的検査を実施（脊椎を動かさないよう愛護的に）。客観所見を検査表に記録した。",s:7,time:120,flag:["umn_tetra"],tag:"critical",critLabel:"神経学的検査で客観データを取得",miss:-10},
+      ex_neckrom:{text:"頸部を屈曲・伸展させて可動域を確認しようとした。",s:-20,time:60,tag:"harmful",verdict:"外傷性の頸椎不安定が疑われる状況で頸部を動かすと、骨片や脱臼が脊髄をさらに損傷し致命的になりうる。中立固定のうえ可動域検査は実施しない。",fx:S=>{S.h.RR=Math.max(10,S.h.RR-4);S.adverseEvents.push({id:"ex_neckrom",score:-20,msg:"頸部の可動域操作で脊髄損傷を悪化させた。"});}},
       ex_pulse:{text:"頻脈で末梢動脈はやや弱い。",s:3,time:60,tag:"good"},
       ex_tpr:{text:"",s:2,time:60},
       monitor:{text:"モニター装着。頻脈、SpO₂はやや低下。呼吸数・呼吸様式も継続して観察する。",s:3,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
@@ -919,6 +944,13 @@ const CASES = {
       if(S.flags.has("d_predniso")||S.flags.has("d_dexameth"))S.h.temp+=((38.6)-S.h.temp)*0.03; },
     dz:["srma","meningitis","systemic_inflammation"],
     correctDx:["dx_meningitis"], primaryDx:"dx_meningitis", correctDispo:["do_admit","do_refer"],
+    neuro:{ loc:"正常", dangerROM:false, reasons:["r_neuro_normal","r_cn_ok","r_neckpain","r_fever_inflam"],
+      mental:"正常・清明", posture:"頸部を硬く保持、低頭位", gait:"硬い歩様だが起立・歩行は可能。明らかな麻痺はない", involuntary:"なし",
+      tone:"正常", spinalPain:"頸部全体（びまん性）に、触診・受動運動で強い疼痛。特定の椎間に限局しない。",
+      proprio:{LF:2,RF:2,LR:2,RR:2}, placing:{LF:2,RF:2,LR:2,RR:2}, hopping:{LF:2,RF:2,LR:2,RR:2},
+      patellar:{LR:2,RR:2}, withdrawal:{LF:2,RF:2,LR:2,RR:2}, perineal:2, panniculus:{L:2,R:2},
+      cn:"明らかな異常なし", superficial:{LF:2,RF:2,LR:2,RR:2}, deep:{LF:2,RF:2,LR:2,RR:2}, hyperesthesia:"頸部全体に過敏あり（びまん性）",
+      urination:"随意排尿あり", bladder:"正常" },
     res:{
       hx_cc:{text:"数日前から発熱と元気消失。首を痛がり、頭を下げてこわばっている。",s:2,time:30},
       hx_onset:{text:"1歳のビーグル。数日前からで、痛みは強くなったり弱くなったり（動揺性）。",s:5,time:30,flag:["waxing"],tag:"good"},
@@ -930,7 +962,8 @@ const CASES = {
       ex_tpr:{text:"",s:3,time:60,tag:"good"},
       ex_temp:{text:"直腸温 40.2℃（発熱）。",s:4,time:60,reveal:["temp"],flag:["fever"],tag:"critical",critLabel:"発熱の確認",miss:-8},
       ex_spine:{text:"びまん性の頸部痛と頸部硬直（特定の椎間に限局しない）。受動的な頸部の屈曲に強く抵抗する。",s:8,time:60,flag:["cervical_pain","diffuse"],tag:"critical",critLabel:"頸部痛/硬直の評価",miss:-12},
-      ex_neuro:{text:"四肢の運動・反射・姿勢反応は概ね正常で、麻痺や明らかな欠損は目立たない。",s:7,time:60,flag:["neuro_normal"],tag:"critical",critLabel:"神経学的検査（多くは正常）",miss:-8},
+      ex_neuro:{text:"神経学的検査を実施。客観所見を検査表に記録した（局在は別ステップで解釈）。",s:7,time:120,flag:["neuro_normal"],tag:"critical",critLabel:"神経学的検査で客観データを取得",miss:-8},
+      ex_neckrom:{text:"頸部を動かして可動域を確認しようとした。強い痛みで抵抗する。",s:-3,time:60,tag:"harmful",verdict:"びまん性頸部痛で無理に可動域を動かすと痛みを増悪させる。診断はCSF等で行い、不要な疼痛刺激は避ける。"},
       monitor:{text:"モニター装着。頻脈、発熱。",s:1,time:30,reveal:["HR","SBP","SpO2","RR"]},
       ivc:{text:"静脈路を確保。",s:2,time:60,flag:["iv"],tag:"good"},
       l_cbc:{text:"好中球性の白血球増多と軽度の左方移動を認める。",s:6,time:120,flag:["inflammation"],tag:"critical",critLabel:"CBCで炎症像を確認",miss:-10},
@@ -969,6 +1002,86 @@ const FAMILY_DXFLOW={
   neck_pain:"主訴『急に首を痛がって歩けない』からの進め方：①まず身体・神経学的検査で痛みを確認し、局在（頸部）と四肢麻痺の有無を評価する。②外傷歴があれば骨折/脱臼を疑い、不動化のうえX線/CTで骨を確認。③発熱＋好中球性の白血球増多（CBC）があり、神経欠損が乏しくびまん性の頸部硬直なら髄膜炎を疑い、CSFで好中球性の細胞増多を確認（ステロイドは感染除外後）。④外傷も発熱もなく、若齢のトイ犬種で軽微な負荷後の発症なら環軸不安定を疑い、X線で環椎-軸椎間の拡大/歯突起の欠損、より安全確実にCT/MRIで確認。⑤中〜高齢の軟骨異栄養性犬種で反復性の強い頸部痛なら頚部椎間板ヘルニアを疑い、X線で椎間腔狭小化、MRIで脊髄圧迫を確定する。",
   vd_collapse:"主訴『嘔吐下痢のあとぐったり』からの進め方：①バイタルと脱水・腹部触診で外科腹症やショックの有無を評価する。②相対的徐脈や低Na・高K傾向、低血糖があれば副腎皮質機能低下症を疑い、電解質・血糖を確認（確定はACTH刺激試験）。③腹部に索状/塊状の構造物・排便停止＋誤食歴なら消化管異物を疑い、腹部X線/エコー。④前腹部痛（祈りのポーズ）＋脂肪食の不摂生＋炎症像なら膵炎を疑い、cPL・腹部エコー。⑤これらが除外され全身状態が保たれていれば、非特異的な急性胃腸炎として対症療法で経過をみる。",
 };
+/* ===== 神経学的検査エンジン（獣医神経病学会2014表に準拠）=====
+   方針：検査では「客観データ」だけを返す。局在の解釈はプレイヤーが別ステップで行う。
+   グレード：NE=評価せず, 0=消失, 1=低下, 2=正常, 3=亢進, 4=クローヌス伴う亢進 */
+const NEURO_REASONS=[
+  {id:"r_tetra",label:"四肢の不全麻痺（起立・歩行が困難）"},
+  {id:"r_postural",label:"四肢すべてで姿勢反応が低下"},
+  {id:"r_reflex_ok",label:"四肢の脊髄反射は保たれる〜亢進（UMN）"},
+  {id:"r_cn_ok",label:"脳神経に明らかな異常がない"},
+  {id:"r_neckpain",label:"頸部痛・頸部の知覚過敏がある"},
+  {id:"r_neuro_normal",label:"姿勢反応・脊髄反射とも正常"},
+  {id:"r_fever_inflam",label:"発熱・全身炎症所見がある"},
+  {id:"r_urinary",label:"排尿障害が主体"},
+  {id:"r_hind_lmn",label:"後肢だけのLMN徴候（反射低下）"},
+  {id:"r_femoral",label:"大腿動脈拍動の消失"},
+];
+const LOC_OPTIONS=["末梢神経","C1-C5","C6-T2","T3-L3","L4-S3","前脳","脳幹","小脳","前庭","全身性神経筋疾患","正常"];
+function ng(v){ return v==null?"–":(v==="NE"?"NE":String(v)); }
+function limbRow(o){ if(!o)return "–"; return `LF ${ng(o.LF)} ／ RF ${ng(o.RF)} ／ LR ${ng(o.LR)} ／ RR ${ng(o.RR)}`; }
+function neuroTableHTML(nd){
+  const row=(label,val)=>`<div class="e"><b>${label}</b>：${val}</div>`;
+  let h='';
+  h+=`<div class="sub">観察 observation</div><div class="log">`;
+  h+=row("意識状態",nd.mental)+row("姿勢",nd.posture)+row("歩様",nd.gait)+row("不随意運動",nd.involuntary||"なし")+`</div>`;
+  h+=`<div class="sub">触診 palpation</div><div class="log">`;
+  h+=row("筋緊張",nd.tone)+row("脊椎・頸部の触診",nd.spinalPain||"特記なし")+`</div>`;
+  h+=`<div class="sub">姿勢反応 postural reactions（NE/0-4）</div><div class="log">`;
+  h+=row("固有位置感覚",limbRow(nd.proprio))+row("踏み直り（触覚）",limbRow(nd.placing))+row("跳び直り hopping",limbRow(nd.hopping))+`</div>`;
+  h+=`<div class="sub">脊髄反射 spinal reflexes（NE/0-4）</div><div class="log">`;
+  h+=row("膝蓋腱反射（後肢）",`LR ${ng(nd.patellar&&nd.patellar.LR)} ／ RR ${ng(nd.patellar&&nd.patellar.RR)}`);
+  h+=row("引っ込め反射",limbRow(nd.withdrawal));
+  h+=row("会陰反射",ng(nd.perineal))+row("皮筋反射",`Lt ${ng(nd.panniculus&&nd.panniculus.L)} ／ Rt ${ng(nd.panniculus&&nd.panniculus.R)}`)+`</div>`;
+  h+=`<div class="sub">脳神経 cranial nerves</div><div class="log">`+row("所見",nd.cn)+`</div>`;
+  h+=`<div class="sub">知覚 sensation（NE/0-4）</div><div class="log">`;
+  h+=row("表在痛覚",limbRow(nd.superficial))+row("深部痛覚",limbRow(nd.deep))+row("知覚過敏",nd.hyperesthesia)+`</div>`;
+  h+=`<div class="sub">排尿機能 urinary function</div><div class="log">`+row("随意排尿",nd.urination)+row("膀胱",nd.bladder)+`</div>`;
+  return h;
+}
+function openNeuroExam(){
+  const nd=S.C.neuro; if(!nd)return;
+  const locBtns=LOC_OPTIONS.map(l=>`<button class="btn ghost nloc" data-loc="${l}" onclick="pickNeuroLoc(this)" style="display:inline-block;width:auto;margin:3px 4px 0 0;padding:6px 10px">${l}</button>`).join('');
+  const reasons=NEURO_REASONS.map(r=>`<label style="display:block;margin:4px 0"><input type="checkbox" id="nr_${r.id}" style="margin-right:6px">${r.label}</label>`).join('');
+  const cur=S.neuroAnswer&&S.neuroAnswer.loc;
+  openSheet(`<h3 style="margin:2px 0 8px">🧠 神経学的検査（客観データ）</h3>
+    <div class="tiny" style="margin-bottom:6px">獣医神経病学会2014表に準拠。NE=評価せず／0=消失／1=低下／2=正常／3=亢進／4=クローヌス。</div>
+    ${neuroTableHTML(nd)}
+    <div class="sub" style="margin-top:10px">① この検査表から、病変部位を選択してください</div>
+    <div id="nlocwrap">${locBtns}</div>
+    <div class="sub" style="margin-top:8px">② その根拠を選択してください（複数可）</div>
+    <div class="log">${reasons}</div>
+    <button class="btn primary" style="margin-top:8px" onclick="submitNeuro()">解釈を確定する</button>
+    <div class="tiny" id="neuromsg" style="margin-top:6px">${cur?("現在の選択："+cur):""}</div>`);
+  if(cur){ const b=document.querySelector('.nloc[data-loc="'+cur+'"]'); if(b)b.style.background='#2c5a78'; }
+  if(S.neuroAnswer){ (S.neuroAnswer.reasons||[]).forEach(id=>{ const c=document.getElementById('nr_'+id); if(c)c.checked=true; }); }
+}
+function pickNeuroLoc(btn){ S._neuroLoc=btn.getAttribute('data-loc'); document.querySelectorAll('.nloc').forEach(b=>b.style.background=''); btn.style.background='#2c5a78'; const m=document.getElementById('neuromsg'); if(m)m.textContent="現在の選択："+S._neuroLoc; }
+function submitNeuro(){
+  const loc=S._neuroLoc||(S.neuroAnswer&&S.neuroAnswer.loc)||null;
+  const reasons=NEURO_REASONS.filter(r=>{const c=document.getElementById('nr_'+r.id);return c&&c.checked;}).map(r=>r.id);
+  S.neuroAnswer={loc,reasons};
+  closeSheet();
+  log("神経局在の解釈を記録："+(loc||"未選択")+"（根拠 "+reasons.length+"項目）。");
+  render();
+}
+function scoreNeuro(){
+  if(!S.C.neuro)return null;
+  const nd=S.C.neuro, ans=S.neuroAnswer, correctLoc=nd.loc, correct=new Set(nd.reasons||[]);
+  let pts=0; const lines=[];
+  if(!ans||!ans.loc){ lines.push(["bad","神経局在の解釈を行わなかった（検査データの解釈は重要な訓練）。"]); return {pts:-8,lines,correctLoc,done:false}; }
+  if(ans.loc===correctLoc){ pts+=18; lines.push(["ok",`病変部位の解釈：${ans.loc}（適切）`]); }
+  else { pts-=8; lines.push(["bad",`病変部位の解釈：${ans.loc}（客観データに整合する局在は ${correctLoc}）`]); }
+  const sel=new Set(ans.reasons||[]); let rc=0,rw=0;
+  for(const r of sel){ if(correct.has(r)){rc++;pts+=2;} else {rw++;pts-=2;} }
+  const missed=[...correct].filter(r=>!sel.has(r));
+  lines.push([rw?"warn":"ok",`根拠の選択：適切 ${rc} ／ 不適切 ${rw} ／ 取りこぼし ${missed.length}`]);
+  if(nd.dangerROM){
+    if(S.flags.has("ex_neckrom")){ lines.push(["bad","危険な頸部可動域検査を実施した（脊髄損傷を悪化させうる）。"]); }
+    else { pts+=4; lines.push(["ok","危険な頸部可動域検査を避けた（NE＝評価せず、の適切な判断）。"]); }
+  }
+  return {pts,lines,correctLoc,done:true};
+}
 // 緊急度プロファイル（最終評価の「緊急度の判断」に使用。UIには出さない）
 const CASE_TEMPO={cat_uo:"urgent",dog_gdv:"immediate",cat_resp:"immediate",dog_addison:"same_day",dog_addison_crisis:"immediate",dog_gastroenteritis:"subacute",dog_gi_fb:"urgent",dog_pancreatitis:"urgent",dog_aai:"urgent",dog_civdd:"urgent",dog_cfx:"immediate",dog_meningitis:"urgent"};
 const CASE_VISUAL={
@@ -1056,7 +1169,7 @@ function startCase(cid,fam){
      flags:new Set(),cflags:new Set(),revealed:new Set(),
      sel:new Set(),scored:new Set(),dx:new Set(),dispo:null,snap:{},results:[],
      labTimeline:[],labPrev:{},labInterps:{},
-     dz:new Set(C.dz||[]),adverseEvents:[],cpaCtx:null,
+     dz:new Set(C.dz||[]),adverseEvents:[],cpaCtx:null,neuroAnswer:null,_neuroLoc:null,
      caT:0,stress:0,arrest:false,dead:false,rosc:false,cpr:null,score:0,log:[]};
   arrestShown=false; reopen=null;
   S.familyId = fam?fam.id:null;
@@ -1111,6 +1224,7 @@ function preApply(id){ // 初期装着（時間を消費せず実施済みにす
 }
 function doAction(id){
   if(S.dead)return;
+  if(id==="ex_neuro"&&S.C.neuro&&S.scored.has("ex_neuro")){ openNeuroExam(); return; } // 再クリックで解釈モーダルを開き直す
   const C=S.C, isLab=actionType(id)==="lab", first=!S.scored.has(id);
   if(!first&&!isLab){ return; }
   const r0=resolveResult(id);
@@ -1140,6 +1254,7 @@ function doAction(id){
   if(id==="ex_tpr"){ S.disp.HR=S.h.HR; S.disp.RR=S.h.RR; } // 手で測ったTPRの値を表示
   advanceTime(actionType(id)==='hx'?0:(r.time||60)); // 問診は時間を消費しない（現場の会話は短時間）。それ以外は所要時間ぶん進める
   if(S.cpr)return;         // CPRモードへ遷移したら通常UIは更新しない
+  if(id==="ex_neuro"&&S.C.neuro&&first){ render(); openNeuroExam(); return; } // 神経検査：客観データ＋局在解釈モーダル
   render(); if(reopen)reopen();
 }
 
@@ -1434,6 +1549,7 @@ function showResult(){
   if(S.dead)score-=25;
   const triage=triageEval(); if(triage)score+=triage.adj;
   const pca=pcaBundle(); if(pca)score+=pca.bonus;
+  const neuro=scoreNeuro(); if(neuro)score+=neuro.pts;
   const pct=clamp(Math.round(score),0,100);
   const grade=pct>=85?"S":pct>=70?"A":pct>=55?"B":pct>=40?"C":"D";
   const gcol=(grade==="S"||grade==="A")?"var(--green)":grade==="B"?"var(--amber)":"var(--red)";
@@ -1456,6 +1572,7 @@ function showResult(){
     ${triage?`<div class="card"><div class="sub">⏱ 緊急度（トリアージ）の評価</div><div class="log"><div class="e"><span class="rchip ${triage.chip}">${triage.TD.label}</span><span style="color:${triage.TD.col}">${triage.TD.desc}</span></div><div class="e tiny">${triage.note}</div></div></div>`:''}
     ${missHtml?`<div class="card"><div class="sub">❗ 必要だったのに行わなかったこと</div><div class="log">${missHtml}</div></div>`:''}
     <div class="card"><div class="sub">✅ 適切だった行動・診断・方針</div><div class="log">${critOk}${goodHtml}${dxLine}${dispoLine}</div></div>
+    ${neuro?`<div class="card" style="border-color:#2c5a78"><div class="sub">🧠 神経局在の解釈（客観データ→局在）</div><div class="log">${neuro.lines.map(l=>`<div class="e"><span class="rchip ${l[0]}">${l[0]==='ok'?'○':l[0]==='bad'?'×':l[0]==='warn'?'△':'·'}</span>${l[1]}</div>`).join('')}<div class="e tiny">客観的な検査データから自分で病変部位を絞り込む訓練。所見の解釈こそが診断推論の核心。</div></div></div>`:''}
     ${pca?`<div class="card" style="border-color:${pca.done>=8?'#1d6b50':pca.done>=5?'#6b561d':'#6b2330'}"><div class="sub">🫀 蘇生後（PCA）ケア・バンドル　${pca.done}/${pca.total} 項目</div><div class="log">${pca.items.map(it=>`<div class="e"><span class="rchip ${it[1]?'ok':'bad'}">${it[1]?'○':'×'}</span>${it[0]}<div class="tiny">${it[2]}</div></div>`).join('')}<div class="e tiny">※ROSCはゴールではなく出発点。これらを継続監視し、可逆的原因の治療と再CPA予防を続ける。</div></div></div>`:''}
     ${harmHtml?`<div class="card"><div class="sub">⛔ 禁忌・不適切だった行動</div><div class="log">${harmHtml}</div></div>`:''}
     ${advHtml?`<div class="card"><div class="sub">💊 薬剤副作用・医原性（減点）</div><div class="log">${advHtml}</div></div>`:''}

@@ -232,7 +232,7 @@ const DIAGNOSES=[
   {sys:"泌尿器",list:[["dx_uo","尿道閉塞"],["dx_aki","急性腎障害（腎後性）"],["dx_fic","特発性膀胱炎（非閉塞）"],["dx_urolith","尿石症"]]},
   {sys:"消化器",list:[["dx_gdv","胃拡張胃捻転（GDV）"],["dx_fb","消化管異物/閉塞"],["dx_pancreatitis","膵炎"],["dx_hge","出血性胃腸炎"]]},
   {sys:"代謝/内分泌",list:[["dx_hyperk","高カリウム血症"],["dx_dka","糖尿病性ケトアシドーシス"],["dx_hypoglycemia","低血糖"],["dx_addison","アジソン病"]]},
-  {sys:"中毒/血液",list:[["dx_tox","中毒"],["dx_imha","免疫介在性溶血性貧血"],["dx_anemia","重度貧血"]]},
+  {sys:"中毒/血液",list:[["dx_tox","中毒"],["dx_imha","免疫介在性溶血性貧血"],["dx_anemia","重度貧血"],["dx_anaphylaxis","アナフィラキシー"],["dx_hemoabdomen","腹腔内出血（血腹）"]]},
   {sys:"神経",list:[["dx_seizure","てんかん重積"],["dx_ivdd","椎間板ヘルニア"],["dx_aai","環軸不安定（環軸亜脱臼）"],["dx_civdd","頚部椎間板ヘルニア"],["dx_cfx","頚椎骨折/脱臼（外傷）"],["dx_meningitis","髄膜炎（SRMA等）"],["dx_cauda","馬尾症候群/仙尾部外傷"],["dx_fce","脊髄梗塞（FCE/虚血性脊髄症）"],["dx_pelvicfx","骨盤骨折（外傷）"]]},
 ];
 function dxLabel(id){ for(const g of DIAGNOSES)for(const d of g.list)if(d[0]===id)return d[1]; return id; }
@@ -628,7 +628,7 @@ const CASES = {
       ex_hydration:{text:"7〜8%の脱水。",s:3,time:60,tag:"good"},
       ex_pulse:{text:"末梢動脈は微弱。低血圧（SAP低値）に対し相対的徐脈で、頻脈になっていない。",s:7,time:60,flag:["relative_brady"],tag:"critical",critLabel:"相対的徐脈/ショックの評価",miss:-12},
       ex_temp:{text:"直腸温 36.8℃（低体温）。",s:1,time:60,reveal:["temp"]},
-      ex_abd:{text:"腹部は軽度の違和感のみ。強い限局痛や鼓音性膨満はない（外科腹症・GDVは否定的）。",s:3,time:60,tag:"good"},
+      ex_abd:{text:"腹部は軽度の違和感のみ。強い限局痛・腫瘤・鼓音性の膨満はない。",s:3,time:60,tag:"good"},
       monitor:{text:"モニター装着。低血圧・相対的徐脈。",s:3,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
       ivc:{text:"静脈路を確保。",s:5,time:60,flag:["iv"],tag:"critical",miss:-14},
       bolus:{text:"晶質液ショックボーラスで循環を補正（Na補正速度に注意）。輸液で血圧・K・乳酸が改善しうる。",s:8,time:30,tag:"critical",critLabel:"輸液で循環補正",miss:-16,need:[{f:["iv"],pen:-4,msg:"静脈路確保前。"}]},
@@ -1167,6 +1167,200 @@ const CASES = {
       ct:{text:"CT：骨盤骨折と転位を確認。随伴する尿路/軟部損傷も評価。",s:5,time:600,abn:true,tag:"good"}},
     finalNote:"明確な外傷歴＋後肢を動かさない＋骨盤触診の疼痛・不安定感（捻髪音）は骨盤骨折を疑う。大腿動脈拍動は触れ四肢は温かく（ATEを除外）、深部痛覚・脊髄反射は保たれる。まず一次評価（ABC）とショックの輸液安定化・鎮痛、次に骨盤X線/CT。尿路損傷（尿腹）や坐骨神経損傷の合併を見逃さない。NSAIDはショック・脱水で避ける。出典：Small Animal Internal Medicine／救急・整形の標準的初期対応。",
   },
+
+  // ===== Q) アナフィラキシー（急性虚脱ファミリー） =====
+  dog_anaphylaxis:{
+    id:"dog_anaphylaxis", icon:"🐕", title:"散歩後に急に虚脱した犬（アナフィラキシー）", level:"★★★", patient:"dog",
+    signalment:"犬 4歳 去勢雄 ラブラドール 25kg", open:"散歩から帰った直後に急にぐったりして、吐いた。",
+    hidden:{HR:170,SBP:68,SpO2:96,RR:44,temp:38.6,lactate:4.2},
+    labs0:{K:4.2,Na:146,Cl:110,iCa:1.2,BUN:26,Cre:1.3,Glu:110,pH:7.30,HCO3:17,PCV:54,TP:7.6,lactate:4.2},
+    physiology(S){ const epi=S.flags.has("d_adrenalin"); const f=S.flags.has("fluids")||S.flags.has("bolus")||S.flags.has("bigbolus");
+      const tBP=epi?(f?108:96):(f?86:68); S.h.SBP+=((tBP)-S.h.SBP)*0.10; S.h.HR+=(((epi?130:170))-S.h.HR)*0.06;
+      S.h.SpO2+=(((S.flags.has("o2")?98:96))-S.h.SpO2)*0.2; if(epi||f)S.h.lactate-=0.02; S.h.lactate=clamp(S.h.lactate,1,8); },
+    dz:["anaphylaxis","distributive_shock"],
+    correctDx:["dx_anaphylaxis"], primaryDx:"dx_anaphylaxis", correctDispo:["do_icu","do_admit"],
+    res:{
+      hx_cc:{text:"散歩から帰った直後に急にぐったりし、嘔吐と軟便（血混じり）。",s:2,time:30},
+      hx_onset:{text:"ごく急性（外出中の出来事から数十分以内）。",s:3,time:30,flag:["peracute"],tag:"good"},
+      hx_tox:{text:"散歩中に草むらで急に鳴いた。ハチか虫に刺された可能性がある。",s:8,time:30,flag:["exposure"],tag:"critical",critLabel:"曝露歴（虫刺され/ワクチン/薬/食物）の聴取",miss:-14},
+      hx_vacc:{text:"数時間前に新しいおやつを与えた。最近のワクチンはない。",s:3,time:30,flag:["exposure"],tag:"good"},
+      hx_appetite:{text:"嘔吐は数回、軟便も血が混じる。発症前は元気だった。",s:2,time:30,tag:"good"},
+      ex_general:{text:"沈鬱、ほぼ虚脱。",s:2,time:60,tag:"good"},
+      ex_mm:{text:"粘膜は蒼白〜やや充血、CRT延長。",s:6,time:60,flag:["pale_mm"],tag:"critical",critLabel:"粘膜色/CRTの評価",miss:-10},
+      ex_skin:{text:"顔面〜口唇が腫れ、体幹に膨疹（蕁麻疹）が出て痒がる。",s:8,time:60,flag:["urticaria"],tag:"critical",critLabel:"皮膚・顔面（膨疹/血管浮腫）の評価",miss:-12},
+      ex_pulse:{text:"速くて弱い脈。",s:4,time:60,flag:["weak_pulse"],tag:"good"},
+      ex_abd:{text:"腹部は軽度の不快感のみ。膨満や鼓音はない。",s:3,time:60,norm:true,tag:"good"},
+      ex_effort:{text:"呼吸はやや速い。重い努力性呼吸ではない。",s:2,time:60,reveal:["RR"]},
+      monitor:{text:"モニター装着。頻脈・低血圧。",s:2,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
+      o2:{text:"酸素を投与。",s:2,time:30,tag:"good"},
+      ivc:{text:"静脈路を確保。",s:4,time:60,flag:["iv"],tag:"critical",critLabel:"静脈路確保",miss:-10},
+      d_adrenalin:{text:"アドレナリンを投与。血圧・循環が速やかに改善する。",s:10,time:30,flag:["epi_given"],tag:"critical",critLabel:"アドレナリン投与（第一選択）",miss:-16},
+      bolus:{text:"晶質液ボーラスで循環を補正。",s:6,time:30,flag:["resus"],tag:"critical",critLabel:"輸液で循環補正",miss:-10,need:[{f:["iv"],pen:-4,msg:"静脈路確保前に輸液を始めようとした。"}]},
+      fluids:{text:"維持輸液を開始。",s:2,time:30,tag:"good"},
+      d_dexameth:{text:"グルココルチコイドを補助的に投与（遅発相の抑制が期待されるが第一選択ではない）。",s:3,time:60,flag:["steroid_adjunct"],tag:"good"},
+      d_famotid:{text:"H2拮抗薬を補助的に投与。",s:2,time:60,tag:"good"},
+      l_fast:{text:"AFAST：胆嚢壁の浮腫（ハロー/二重層様）。腹腔内に多量の遊離液体はない。",s:6,time:120,flag:["gb_halo"],tag:"good"},
+      l_chem:{text:"ALTなど肝逸脱酵素の上昇（肝うっ血を示す）。",s:5,time:120,flag:["alt_up"],tag:"good"},
+      l_pcvtp:{text:"PCVはやや高め（血液濃縮）。著明な貧血はない。",s:3,time:120,norm:true,tag:"good"},
+      p_abdomino:{text:"腹腔穿刺：ごく少量で非血性。腹腔内出血は否定的。",s:2,time:120,flag:["tap_nonblood"],tag:"good"},
+      d_meloxicam:{text:"NSAIDを投与。低血圧・消化管症状のあるショックでは避ける。",s:-5,time:60,tag:"harmful",verdict:"分布性ショック＋消化管出血傾向の状況でNSAIDは腎・消化管を悪化させる。まずアドレナリンと輸液を。"},
+    },
+    truthImg:{region:"abdomen", text:"胆嚢壁の浮腫（ハロー）。腹腔内に多量の出血はない。",
+      ct:{text:"画像上は胆嚢壁浮腫が主体。緊急の高度画像より初期安定化を優先。",s:-4,time:600,abn:false,tag:"harmful",verdict:"アナフィラキシーは臨床診断。高度画像より曝露歴・皮膚所見・アドレナリン投与を優先。"}},
+    finalNote:"曝露（虫刺され/ワクチン/薬/食物）の直後の急性虚脱＋分布性ショック（蒼白・弱脈・低血圧）＋皮膚徴候（顔面腫脹/蕁麻疹）＋急性（しばしば出血性の）消化器症状は、イヌのアナフィラキシーの典型。イヌでは肝うっ血・門脈圧亢進から消化器徴候が前景化し、AFASTで胆嚢壁浮腫（ハロー）、ALT上昇がヒントになる。第一選択はアドレナリン、加えて輸液・酸素、補助的にグルココルチコイド/抗ヒスタミン。出典：Small Animal Critical Care Medicine 3rd（Anaphylaxis）。",
+  },
+
+  // ===== R) 腹腔内出血/血腹（急性虚脱ファミリー） =====
+  dog_hemoabdomen:{
+    id:"dog_hemoabdomen", icon:"🦮", title:"急に虚脱し歯ぐきが白い犬（腹腔内出血）", level:"★★★", patient:"dog",
+    signalment:"犬 10歳 避妊雌 ゴールデンレトリバー 30kg", open:"今朝から急にふらつき、歯ぐきが白い。一度倒れた。",
+    hidden:{HR:165,SBP:72,SpO2:96,RR:40,temp:37.8,lactate:4.8},
+    labs0:{K:4.4,Na:147,Cl:112,iCa:1.15,BUN:30,Cre:1.5,Glu:120,pH:7.29,HCO3:17,PCV:28,TP:4.8,lactate:4.8},
+    physiology(S){ const f=S.flags.has("fluids")||S.flags.has("bolus"); const big=S.flags.has("bigbolus"); const tx=S.flags.has("p_transfuse"); const surg=S.flags.has("p_surgery");
+      const tBP=surg?108:(tx?96:(f?88:72)); S.h.SBP+=((tBP)-S.h.SBP)*0.08; S.h.HR+=(((surg?110:150))-S.h.HR)*0.05;
+      if(tx)S.h.PCV=Math.min(38,S.h.PCV+0.05); if(big&&!surg)S.h.PCV=Math.max(20,S.h.PCV-0.04);
+      S.h.SpO2+=(((S.flags.has("o2")?98:96))-S.h.SpO2)*0.2; },
+    dz:["hemoabdomen","hemorrhagic_shock","splenic_mass"],
+    correctDx:["dx_hemoabdomen"], primaryDx:"dx_hemoabdomen", correctDispo:["do_surgery","do_icu","do_admit"],
+    res:{
+      hx_cc:{text:"今朝から急にふらつき、歯ぐきが白い。一度ぐったり倒れた。",s:2,time:30},
+      hx_onset:{text:"急性。ここ数日はやや元気がなかった。",s:3,time:30,tag:"good"},
+      hx_tox:{text:"外傷・事故の心当たりはない。",s:3,time:30,flag:["no_trauma"],tag:"good"},
+      hx_pmh:{text:"高齢、これまで大きな病気の指摘はない。",s:2,time:30,tag:"good"},
+      ex_general:{text:"沈鬱・虚脱。",s:2,time:60,tag:"good"},
+      ex_mm:{text:"著明な粘膜蒼白、CRT延長。",s:7,time:60,flag:["pale_mm"],tag:"critical",critLabel:"粘膜色/CRTの評価",miss:-12},
+      ex_pulse:{text:"速くて弱い脈（出血性ショック）。",s:5,time:60,flag:["weak_pulse"],tag:"critical",critLabel:"末梢動脈/灌流の評価",miss:-10},
+      ex_abd:{text:"腹部は膨満し、波動感（液体貯留）。鼓音性ではない。",s:8,time:60,flag:["fluid_wave"],tag:"critical",critLabel:"腹部の波動/膨満の評価",miss:-12},
+      ex_skin:{text:"膨疹や顔面腫脹はない。",s:2,time:60,norm:true,tag:"good"},
+      ex_effort:{text:"呼吸はやや速い。",s:1,time:60,reveal:["RR"]},
+      monitor:{text:"モニター装着。頻脈・低血圧。",s:2,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
+      o2:{text:"酸素を投与。",s:2,time:30,tag:"good"},
+      ivc:{text:"太い静脈路を確保。",s:5,time:60,flag:["iv"],tag:"critical",critLabel:"静脈路確保",miss:-10},
+      bolus:{text:"晶質液ボーラスで循環を補正（許容的低血圧を意識）。",s:5,time:30,flag:["resus"],tag:"good",need:[{f:["iv"],pen:-4,msg:"静脈路確保前に輸液を始めようとした。"}]},
+      bigbolus:{text:"大量急速輸液。希釈性凝固障害・血圧上昇による再出血を招きうる。",s:-4,time:30,tag:"harmful",verdict:"活動性腹腔内出血では大量急速輸液は再出血・希釈を助長。少量ずつ＋許容的低血圧、必要なら輸血・外科止血を。"},
+      l_pcvtp:{text:"PCV 28%・TP 4.8 g/dL（貧血＋低蛋白＝急性出血を示唆）。",s:7,time:120,reveal:["PCV"],flag:["low_pcv"],tag:"critical",critLabel:"PCV/TPの評価",miss:-10},
+      l_fast:{text:"AFAST：腹腔内に多量の遊離液体。腹水スコア高値。",s:8,time:120,flag:["free_fluid"],tag:"critical",critLabel:"AFASTで腹腔内遊離液体を確認",miss:-12},
+      p_abdomino:{text:"腹腔穿刺：凝固しない血液を吸引（腹腔内出血）。",s:8,time:120,flag:["nonclotting_blood"],tag:"critical",critLabel:"腹腔穿刺で非凝固血液を確認",miss:-12},
+      l_us:{text:"腹部超音波：脾臓に腫瘤性病変と腹腔内液体。",s:6,time:180,flag:["splenic_mass"],tag:"good"},
+      p_transfuse:{text:"輸血を実施（重度貧血/持続出血に対し）。",s:7,time:120,flag:["transfused"],tag:"good"},
+      p_surgery:{text:"開腹して止血（脾摘など）。根本的な出血源の制御。",s:8,time:600,tag:"critical",critLabel:"外科的止血（出血源の制御）",miss:-12,need:[{f:["iv"],pen:-6,msg:"麻酔導入前に静脈路と循環安定化を。"}]},
+      l_coag:{text:"凝固系を評価（消費性凝固障害の有無）。",s:3,time:120,tag:"good"},
+      d_meloxicam:{text:"NSAIDを投与。出血・ショックでは禁忌。",s:-6,time:60,tag:"harmful",verdict:"活動性出血・低血圧へのNSAIDは止血障害・腎障害を悪化させる。"},
+    },
+    truthImg:{region:"abdomen", text:"腹腔内に多量の遊離液体（出血）と脾臓の腫瘤。外傷性所見はない。",
+      ct:{text:"CT：脾臓腫瘤と腹腔内出血。ただし不安定例では撮影前に安定化を要する。",s:-2,time:600,abn:true,tag:"harmful",verdict:"所見は得られるが、不安定な出血性ショックでCTを優先せず、AFAST・腹腔穿刺・止血を先に。"}},
+    finalNote:"高齢・大型犬の急性虚脱＋著明な粘膜蒼白＋弱脈＋腹部の波動/膨満＋PCV/TP低下は、非外傷性の腹腔内出血（しばしば脾臓腫瘤の破裂）を疑う。AFASTで腹腔内遊離液体、腹腔穿刺で非凝固血液を確認するのが最短。初期は許容的低血圧を意識した輸液と、必要に応じ輸血、根本は外科的止血。大量急速輸液は再出血・希釈を招くため避ける。NSAIDは禁忌。出典：Small Animal Critical Care Medicine 3rd（Hemoperitoneum/AFAST）。",
+  },
+
+  // ===== S) 猫喘息/下気道疾患（呼吸困難ファミリー） =====
+  cat_asthma:{
+    id:"cat_asthma", icon:"🐱", title:"急に咳き込み苦しむ猫（下気道/喘息）", level:"★★★", patient:"cat",
+    signalment:"猫 4歳 避妊雌 雑種 4.2kg", open:"急に口を開けて苦しそうに呼吸し、咳き込む。",
+    hidden:{HR:200,SBP:130,SpO2:90,RR:62,temp:38.5},
+    labs0:{K:4.0,Na:150,Cl:118,iCa:1.25,BUN:24,Cre:1.4,Glu:115,pH:7.34,HCO3:20,PCV:38,TP:7.0,lactate:2.0},
+    physiology(S){ const o2=S.flags.has("o2"),br=S.flags.has("d_terbutal"),st=S.flags.has("d_dexameth")||S.flags.has("d_predniso");
+      const tSpO2=(br?97:o2?94:90)+(st?1:0); S.h.SpO2+=((tSpO2)-S.h.SpO2)*0.2; S.h.SpO2=clamp(S.h.SpO2,78,100);
+      S.h.RR+=(((br?34:o2?48:62))-S.h.RR)*0.06; },
+    dz:["feline_asthma","lower_airway"],
+    correctDx:["dx_asthma"], primaryDx:"dx_asthma", correctDispo:["do_admit","do_icu"],
+    res:{
+      hx_cc:{text:"急に呼吸が苦しくなり、咳き込む。",s:2,time:30},
+      hx_onset:{text:"以前にも似た発作が時々あり、自然に治まっていた（発作性・反復性）。",s:6,time:30,flag:["episodic"],tag:"critical",critLabel:"発作性・反復性の聴取",miss:-10},
+      hx_resp:{text:"呼気が長く、お腹を使って吐き出すような呼吸。乾いた咳もある。",s:4,time:30,flag:["expiratory_hx"],tag:"good"},
+      hx_tox:{text:"外傷の心当たりはない。",s:2,time:30,flag:["no_trauma"],tag:"good"},
+      ex_general:{text:"開口呼吸で不安そう。",s:2,time:60,tag:"good"},
+      ex_effort:{text:"呼気性の努力呼吸（呼気が延長し、腹圧をかけて吐く）。",s:7,time:60,flag:["expiratory_effort"],tag:"critical",critLabel:"呼吸様式（呼気性/吸気性）の評価",miss:-10,reveal:["RR"]},
+      ex_thorax:{text:"両側にwheeze（笛のような音）と呼気延長。肺音は左右対称で減弱はない。",s:8,time:60,flag:["wheeze"],tag:"critical",critLabel:"肺音聴診",miss:-12},
+      ex_mm:{text:"粘膜はややチアノーゼ、CRTは正常。著明な蒼白ではない。",s:3,time:60,tag:"good"},
+      ex_heart:{text:"心雑音やギャロップははっきりしない。",s:3,time:60,norm:true,tag:"good"},
+      monitor:{text:"モニター装着。頻呼吸、SpO₂低下。",s:2,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
+      o2:{text:"酸素を投与（最小ハンドリングで）。",s:6,time:30,flag:["o2done"],tag:"critical",critLabel:"酸素化・最小ハンドリング",miss:-10},
+      d_terbutal:{text:"テルブタリン（β2刺激）で気管支を拡張。呼気努力が和らぐ。",s:9,time:30,flag:["broncho"],tag:"critical",critLabel:"気管支拡張薬",miss:-12},
+      d_dexameth:{text:"グルココルチコイドで気道炎症を抑制。",s:6,time:60,flag:["steroid"],tag:"critical",critGroup:"asthma_steroid",critLabel:"抗炎症（ステロイド）",miss:-10},
+      d_predniso:{text:"プレドニゾロンで気道炎症を抑制。",s:6,time:60,flag:["steroid"],tag:"critical",critGroup:"asthma_steroid",critLabel:"抗炎症（ステロイド）",miss:-10},
+      l_thorax:{text:"胸部X線：気管支パターン（ドーナツ/トラムライン）と肺の過膨張。※保定ストレスに注意し、安定後に。",s:3,time:180,flag:["bronchial_pattern"],tag:"good"},
+      l_fast:{text:"TFAST：胸水はなく、肺の滑り（glide sign）は保たれる。",s:4,time:120,flag:["tfast_clear"],tag:"good",norm:true},
+      l_pcvtp:{text:"PCV・TPは正常域。著明な貧血はない。",s:2,time:120,flag:["pcv_normal"],tag:"good",norm:true},
+      p_thoraco:{text:"胸腔穿刺を試みたが、液体も空気も引けない（適応がない）。",s:-4,time:120,tag:"harmful",verdict:"下気道疾患に胸腔穿刺の適応はない。呼吸様式・聴診・TFASTで胸腔病変がないことを確認してから判断する。"},
+      d_furosem:{text:"フロセミドを投与。心不全を想定した利尿だが、下気道疾患では脱水を招くだけ。",s:-4,time:60,tag:"harmful",verdict:"心原性でない呼吸困難に漫然とフロセミドを使うと脱水・電解質異常を招く。心雑音/TFASTで心原性を確認してから。"},
+      bigbolus:{text:"大量急速輸液を実施。呼吸器疾患では肺水腫を助長しうる。",s:-5,time:30,tag:"harmful",verdict:"呼吸困難の猫への積極的輸液は有害。まず酸素・気管支拡張薬で安定化する。"},
+    },
+    truthImg:{region:"thorax", text:"気管支パターンと過膨張。胸水・気胸・腫瘤はない。",
+      ct:{text:"画像は気管支パターンが主体。安定化（酸素・気管支拡張）が優先。",s:-2,time:600,abn:true,tag:"harmful",verdict:"高度画像より、まず酸素・気管支拡張薬での安定化を優先する。"}},
+    finalNote:"発作性・反復性の呼気性努力呼吸＋両側wheeze＋気管支パターンは猫の下気道疾患（喘息/慢性気管支炎）に合致。胸水・気胸・貧血をTFAST・聴診・粘膜色・PCVで除外する。治療は酸素＋最小ハンドリング、気管支拡張薬（テルブタリン）、グルココルチコイド。心原性でないのにフロセミド、適応のない胸腔穿刺、過剰輸液は害。出典：Small Animal Internal Medicine 6th（下気道疾患）。",
+  },
+
+  // ===== T) 気胸（呼吸困難ファミリー） =====
+  cat_pneumothorax:{
+    id:"cat_pneumothorax", icon:"🐈", title:"急に浅く速い呼吸の猫（気胸）", level:"★★★", patient:"cat",
+    signalment:"猫 3歳 去勢雄 雑種 4.5kg", open:"急に呼吸が速く浅くなり、苦しそうにしている。",
+    hidden:{HR:215,SBP:115,SpO2:85,RR:72,temp:38.0},
+    labs0:{K:4.1,Na:150,Cl:118,iCa:1.25,BUN:24,Cre:1.4,Glu:130,pH:7.32,HCO3:19,PCV:39,TP:7.1,lactate:2.4},
+    physiology(S){ const tapped=S.flags.has("p_thoraco")||S.flags.has("p_chesttube"),o2=S.flags.has("o2");
+      const tSpO2=tapped?(o2?98:95):(o2?89:85); S.h.SpO2+=((tSpO2)-S.h.SpO2)*0.2; S.h.SpO2=clamp(S.h.SpO2,75,100);
+      S.h.RR+=(((tapped?40:o2?66:72))-S.h.RR)*0.06; },
+    dz:["pneumothorax","trauma"],
+    correctDx:["dx_pneumothorax"], primaryDx:"dx_pneumothorax", correctDispo:["do_icu","do_admit"],
+    res:{
+      hx_cc:{text:"急に速く浅い呼吸になり、動きたがらない。",s:2,time:30},
+      hx_tox:{text:"数時間前まで外におり、事故や高所からの落下があったかもしれない。",s:6,time:30,flag:["trauma_possible"],tag:"critical",critLabel:"外傷歴の聴取",miss:-10},
+      hx_onset:{text:"急性の発症。",s:2,time:30,tag:"good"},
+      ex_general:{text:"速く浅い呼吸。じっとして動きたがらない。",s:2,time:60,tag:"good"},
+      ex_effort:{text:"速く浅い拘束性の呼吸。",s:4,time:60,flag:["restrictive"],tag:"good",reveal:["RR"]},
+      ex_thorax:{text:"背側で肺音が減弱している（空気は背側に貯留）。打診で過共鳴。",s:8,time:60,flag:["dorsal_quiet"],tag:"critical",critLabel:"肺音聴診（部位差）",miss:-12},
+      ex_mm:{text:"粘膜はチアノーゼ、CRTは正常〜やや延長。著明な蒼白ではない。",s:3,time:60,tag:"good"},
+      ex_heart:{text:"心音は減弱気味だが雑音・ギャロップははっきりしない。",s:2,time:60,norm:true,tag:"good"},
+      monitor:{text:"モニター装着。著明な頻呼吸、SpO₂低下。",s:2,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
+      o2:{text:"酸素を投与（最小ハンドリングで）。",s:6,time:30,flag:["o2done"],tag:"critical",critLabel:"酸素化・最小ハンドリング",miss:-10},
+      l_fast:{text:"TFAST：肺の滑り（glide sign）が消失し、肺点（lung point）を認める。胸水はない。",s:9,time:120,flag:["no_glide"],tag:"critical",critLabel:"TFASTでglide sign消失を確認",miss:-14},
+      l_thorax:{text:"胸部X線：肺の虚脱と胸腔内の空気、心陰影の挙上。※不安定なら撮影より脱気を優先。",s:3,time:180,flag:["pneumo_xray"],tag:"good"},
+      l_pcvtp:{text:"PCV・TPは正常域。著明な貧血はない。",s:2,time:120,flag:["pcv_normal"],tag:"good",norm:true},
+      p_thoraco:{text:"胸腔穿刺で空気を吸引すると呼吸が楽になる。診断的かつ治療的。",s:10,time:120,flag:["tapped"],tag:"critical",critLabel:"胸腔穿刺で脱気",miss:-14},
+      p_chesttube:{text:"再貯留・大量なら胸腔ドレーンを留置。",s:5,time:180,flag:["chesttube"],tag:"good"},
+      d_furosem:{text:"フロセミドを投与。気胸に利尿は無意味で脱水を招く。",s:-4,time:60,tag:"harmful",verdict:"気胸は脱気が治療。利尿薬の適応はない。聴診・TFASTで胸腔の空気を捉える。"},
+      bigbolus:{text:"大量急速輸液を実施。呼吸困難の猫には不要・有害。",s:-4,time:30,tag:"harmful",verdict:"呼吸困難の猫への積極輸液は有害。まず酸素と脱気。"},
+    },
+    truthImg:{region:"thorax", text:"胸腔内に空気（気胸）と肺の虚脱。胸水や腫瘤はない。",
+      ct:{text:"CT：気胸と肺虚脱。ただし不安定例では撮影前に脱気・安定化を。",s:-2,time:600,abn:true,tag:"harmful",verdict:"不安定な気胸でCTを優先せず、TFAST＋胸腔穿刺を先に。"}},
+    finalNote:"急性の速く浅い呼吸＋背側の肺音減弱・過共鳴＋TFASTでglide sign消失（肺点）は気胸の所見。外傷歴があることが多い。治療は酸素＋胸腔穿刺による脱気（診断的かつ治療的）、再貯留すれば胸腔ドレーン。胸水・喘息・貧血を聴診・TFAST・粘膜色・PCVで分ける。出典：Small Animal Critical Care Medicine 3rd（TFAST/Pneumothorax）。",
+  },
+
+  // ===== U) 重度貧血（呼吸困難ファミリー） =====
+  cat_anemia:{
+    id:"cat_anemia", icon:"🐈‍⬛", title:"元気がなく呼吸が速い猫（重度貧血）", level:"★★★", patient:"cat",
+    signalment:"猫 2歳 去勢雄 雑種 3.5kg", open:"元気がなく、呼吸が速い。歯ぐきが白い。",
+    hidden:{HR:200,SBP:110,SpO2:95,RR:52,temp:38.2},
+    labs0:{K:4.2,Na:150,Cl:118,iCa:1.25,BUN:26,Cre:1.5,Glu:120,pH:7.34,HCO3:19,PCV:12,TP:6.5,lactate:3.0},
+    physiology(S){ const tx=S.flags.has("p_transfuse");
+      if(tx)S.h.PCV=Math.min(26,S.h.PCV+0.06); S.h.SpO2+=(((S.flags.has("o2")?96:95))-S.h.SpO2)*0.2;
+      S.h.RR+=(((tx?36:50))-S.h.RR)*0.05; S.h.HR+=(((tx?160:200))-S.h.HR)*0.05; },
+    dz:["severe_anemia","hemic"],
+    correctDx:["dx_anemia"], primaryDx:"dx_anemia", correctDispo:["do_admit","do_icu"],
+    res:{
+      hx_cc:{text:"元気がなく、呼吸が速い。歯ぐきが白い。",s:2,time:30},
+      hx_onset:{text:"数日かけてだんだん元気がなくなった。",s:3,time:30,tag:"good"},
+      hx_tox:{text:"外猫でノミが多い。中毒や出血の明らかな心当たりはない。",s:4,time:30,flag:["flea_hist"],tag:"good"},
+      hx_pmh:{text:"これまで大きな病気はない。",s:1,time:30},
+      ex_general:{text:"沈鬱で弱々しい。呼吸は速いが、激しい努力性ではない。",s:3,time:60,tag:"good"},
+      ex_mm:{text:"著明な粘膜蒼白、CRTやや延長。",s:8,time:60,flag:["pale_mm"],tag:"critical",critLabel:"粘膜色/CRTの評価",miss:-12},
+      ex_effort:{text:"呼吸は速いが、胸壁の陥凹や呼気延長など強い努力性は乏しい。",s:5,time:60,flag:["nonlabored"],tag:"critical",critLabel:"呼吸様式（努力性の有無）の評価",miss:-10,reveal:["RR"]},
+      ex_thorax:{text:"肺音は清明で左右対称。減弱やwheeze、crackleはない。",s:7,time:60,flag:["clear_lungs"],tag:"critical",critLabel:"肺音聴診（清明＝胸腔/下気道は主因でない）",miss:-10},
+      ex_heart:{text:"血流性（機能性）の収縮期雑音を聴取（高拍出による）。",s:4,time:60,flag:["hemic_murmur"],tag:"good"},
+      monitor:{text:"モニター装着。頻脈、頻呼吸。SpO₂は比較的保たれる。",s:2,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
+      o2:{text:"酸素を投与（貧血性低酸素には限定的だが実施）。",s:3,time:30,tag:"good"},
+      ivc:{text:"静脈路を確保。",s:3,time:60,flag:["iv"],tag:"good"},
+      l_pcvtp:{text:"PCV 12%・TP 6.5 g/dL（重度貧血、総蛋白は保たれる）。",s:9,time:120,reveal:["PCV"],flag:["low_pcv"],tag:"critical",critLabel:"PCV/TPの評価",miss:-14},
+      l_fast:{text:"TFAST：胸水はなく、肺の滑り（glide sign）も保たれる（呼吸困難の原因は胸腔ではない）。",s:5,time:120,flag:["tfast_clear"],tag:"good",norm:true},
+      l_smear:{text:"血液塗抹：自己凝集や球状赤血球、ハインツ小体などを評価（溶血の原因検索）。",s:6,time:120,flag:["smear_done"],tag:"good"},
+      l_cbc:{text:"再生性貧血の評価（網状赤血球）。",s:4,time:120,flag:["cbc_done"],tag:"good"},
+      p_transfuse:{text:"輸血を実施（重度貧血に対し酸素運搬能を補う）。",s:9,time:120,flag:["transfused"],tag:"critical",critLabel:"輸血",miss:-12},
+      l_thorax:{text:"胸部X線：肺野・胸腔に著明な異常はない。※蒼白で呼吸が速い場合、まず貧血を疑う。",s:1,time:180,norm:true},
+      p_thoraco:{text:"胸腔穿刺を試みたが、液体も空気も引けない（適応がない）。",s:-4,time:120,tag:"harmful",verdict:"呼吸が速くても肺音清明＋著明蒼白＋PCV低値なら原因は貧血。胸腔穿刺の適応はない。"},
+      d_furosem:{text:"フロセミドを投与。貧血性の頻呼吸に利尿は無意味で脱水を招く。",s:-4,time:60,tag:"harmful",verdict:"貧血による頻呼吸を心不全と取り違えてフロセミドを使うと脱水で悪化する。"},
+    },
+    truthImg:{region:"thorax", text:"胸腔・肺野に著明な異常はない（呼吸促拍の主因は重度貧血）。"},
+    finalNote:"著明な粘膜蒼白＋呼吸促拍だが努力性は乏しい＋肺音清明＋PCV著減は、重度貧血による（呼吸器疾患ではない）頻呼吸を示す。総蛋白が保たれていれば溶血や慢性を、低ければ出血を考える。TFASTで胸腔病変を除外し、酸素は限定的なので根治は輸血と原因治療。心不全と取り違えてフロセミド、適応のない胸腔穿刺は害。『呼吸が速い＝呼吸器』と決めつけないことが要点。出典：Small Animal Internal Medicine 6th。",
+  },
 };
 
 // ---------- 状態・エンジン ----------
@@ -1183,11 +1377,19 @@ const FAMILIES=[
   {id:"feline_hindlimb", icon:"🐈", title:"急に後ろ足が動かない猫", level:"★★★",
    opening:"猫が突然、後ろ足を引きずって鳴いている。飼い主は『腰を痛めたか、足を骨折したのかも』と思って来院。",
    variants:["feline_ate","cat_cauda","cat_fce","cat_pelvic_fx"]},
+  {id:"acute_collapse", icon:"🐕", title:"急にぐったり倒れた犬", level:"★★★",
+   opening:"犬が急にぐったりして倒れた。動こうとせず、様子がおかしい。",
+   variants:["dog_anaphylaxis","dog_hemoabdomen","dog_gdv","dog_addison_crisis"]},
+  {id:"feline_dyspnea", icon:"🐱", title:"呼吸が苦しそうな猫", level:"★★★",
+   opening:"猫が口を開け、苦しそうに速い呼吸をしている。ぐったりして動きたがらない。",
+   variants:["cat_resp","cat_asthma","cat_pneumothorax","cat_anemia"]},
 ];
 // 主訴からの鑑別の進め方（除外診断フロー）。最終評価でのみ表示し、推論の道筋を教える。
 const FAMILY_DXFLOW={
   neck_pain:"主訴『急に首を痛がって歩けない』からの進め方：①まず身体・神経学的検査で痛みを確認し、局在（頸部）と四肢麻痺の有無を評価する。②外傷歴があれば骨折/脱臼を疑い、不動化のうえX線/CTで骨を確認。③発熱＋好中球性の白血球増多（CBC）があり、神経欠損が乏しくびまん性の頸部硬直なら髄膜炎を疑い、CSFで好中球性の細胞増多を確認（ステロイドは感染除外後）。④外傷も発熱もなく、若齢のトイ犬種で軽微な負荷後の発症なら環軸不安定を疑い、X線で環椎-軸椎間の拡大/歯突起の欠損、より安全確実にCT/MRIで確認。⑤中〜高齢の軟骨異栄養性犬種で反復性の強い頸部痛なら頚部椎間板ヘルニアを疑い、X線で椎間腔狭小化、MRIで脊髄圧迫を確定する。",
   vd_collapse:"主訴『嘔吐下痢のあとぐったり』からの進め方：①バイタルと脱水・腹部触診で外科腹症やショックの有無を評価する。②相対的徐脈や低Na・高K傾向、低血糖があれば副腎皮質機能低下症を疑い、電解質・血糖を確認（確定はACTH刺激試験）。③腹部に索状/塊状の構造物・排便停止＋誤食歴なら消化管異物を疑い、腹部X線/エコー。④前腹部痛（祈りのポーズ）＋脂肪食の不摂生＋炎症像なら膵炎を疑い、cPL・腹部エコー。⑤これらが除外され全身状態が保たれていれば、非特異的な急性胃腸炎として対症療法で経過をみる。",
+  feline_dyspnea:"主訴『呼吸が苦しそうな猫』からの進め方：まず酸素＋最小ハンドリングで安定化し、保定ストレスで急変させない。次に呼吸様式・聴診・粘膜色・TFASTで原因の場所を分ける。①呼気性の努力＋両側wheeze＋発作性の既往なら下気道（喘息）。気管支拡張薬＋ステロイド。②速く浅い呼吸＋背側で肺音減弱＋TFASTでglide sign消失（外傷歴）なら気胸。胸腔穿刺で脱気。③吸気性/拘束性＋腹側で肺音減弱＋TFASTで胸水＋心雑音/ギャロップなら胸水/心不全。胸腔穿刺＋心評価。④呼吸は速いが努力性に乏しく、肺音は清明で著明な粘膜蒼白＋PCV著減なら重度貧血（呼吸器疾患ではない）。輸血と原因検索。※心原性でないのにフロセミド、適応のない胸腔穿刺は避ける。",
+  acute_collapse:"主訴『急にぐったり倒れた犬』からの進め方：まずABC（気道・呼吸・循環）と粘膜色・脈・腹部を評価しショックを認識する。①曝露歴（虫刺され/ワクチン/薬/食物）の直後で、顔面腫脹/蕁麻疹＋蒼白・弱脈・低血圧＋急性（出血性）下痢ならアナフィラキシー。第一選択はアドレナリン＋輸液。②高齢大型犬で著明な粘膜蒼白＋腹部の波動/膨満＋PCV/TP低下なら腹腔内出血。AFASTで遊離液体、腹腔穿刺で非凝固血液を確認し、許容的低血圧の輸液・輸血・外科止血へ（大量輸液は再出血を招く）。③大型犬で腹部が鼓音性に膨満し非生産性の嘔吐ならGDV。右側臥位X線で確認し、減圧＋ショック輸液＋整復・胃固定。④嘔吐下痢の経過＋低血圧なのに頻脈が乏しい（相対的徐脈）＋低Na/高K・低血糖なら副腎クリーゼ。電解質・血糖を確認しグルココルチコイド・輸液で安定化（確定はACTH刺激）。",
   feline_hindlimb:"主訴『急に後ろ足が動かない猫』からの進め方：まず急性後肢麻痺を〈血管性／神経性／整形外科性〉に分ける。①後肢の大腿動脈拍動・四肢温・肉球（爪床）色を確認。拍動が触れず冷たく蒼白なら血管性＝大動脈血栓塞栓症（ATE、心音でギャロップ/雑音、心エコー）。激痛なので強力な鎮痛と抗血栓治療へ。②拍動が触れ四肢が温かければ血管性は遠のく。外傷歴＋骨盤の不安定/捻髪音なら整形外科性＝骨盤骨折（X線、ショック安定化、尿路損傷の評価）。③外傷がはっきりせず、尾下垂・肛門括約筋/会陰反射の低下・膀胱過伸展なら馬尾（仙尾部外傷）。膀胱の排尿管理を最優先、仙尾部X線。④最急性で発症時の一声以後は無痛性、左右非対称で深部痛覚が保たれるなら脊髄梗塞（FCE）。MRIで確認し支持療法・リハビリ。※神経学的検査表で客観データを取り、自分で局在（L4-S3など）を解釈することが鍵。",
 };
 // 主訴ファミリーごとの「分岐所見を取りに行けたか」チェックリスト（最終評価で表示）
@@ -1196,6 +1398,13 @@ const FAMILY_CHECK={
     ["大腿動脈拍動の確認","ex_femoral"],["四肢温の確認","ex_limbtemp"],["肉球・爪床色の確認","ex_pads"],
     ["心音の聴診","ex_heart"],["尾・肛門括約筋/会陰反射","ex_tailanus"],["膀胱の評価","ex_bladder"],
     ["外傷歴の聴取","hx_tox"],["神経学的検査","ex_neuro"]]},
+  acute_collapse:{title:"急性虚脱を〈分布性/出血性/閉塞性/内分泌〉に分ける所見を取れたか",items:[
+    ["粘膜色・CRT","ex_mm"],["末梢動脈/脈の評価","ex_pulse"],["腹部触診","ex_abd"],
+    ["皮膚・顔面（膨疹/浮腫）","ex_skin"],["曝露歴/外傷歴の聴取","hx_tox"],["AFAST/TFAST","l_fast"],
+    ["PCV/TP","l_pcvtp"],["血糖/電解質","l_chem"]]},
+  feline_dyspnea:{title:"呼吸困難の原因（下気道/胸腔/心原性/貧血）を分ける所見を取れたか",items:[
+    ["酸素化・最小ハンドリング","o2"],["呼吸様式の評価","ex_effort"],["肺音の聴診","ex_thorax"],
+    ["心音の聴診","ex_heart"],["粘膜色/CRT","ex_mm"],["TFAST","l_fast"],["PCV/TP","l_pcvtp"]]},
 };
 function familyCheck(){
   const fc=FAMILY_CHECK[S.familyId]; if(!fc)return null;
@@ -1289,7 +1498,7 @@ function scoreNeuro(){
   return {pts,lines,correctLoc,done:true};
 }
 // 緊急度プロファイル（最終評価の「緊急度の判断」に使用。UIには出さない）
-const CASE_TEMPO={cat_uo:"urgent",dog_gdv:"immediate",cat_resp:"immediate",dog_addison:"same_day",dog_addison_crisis:"immediate",dog_gastroenteritis:"subacute",dog_gi_fb:"urgent",dog_pancreatitis:"urgent",dog_aai:"urgent",dog_civdd:"urgent",dog_cfx:"immediate",dog_meningitis:"urgent",feline_ate:"immediate",cat_cauda:"urgent",cat_fce:"urgent",cat_pelvic_fx:"immediate"};
+const CASE_TEMPO={cat_uo:"urgent",dog_gdv:"immediate",cat_resp:"immediate",dog_addison:"same_day",dog_addison_crisis:"immediate",dog_gastroenteritis:"subacute",dog_gi_fb:"urgent",dog_pancreatitis:"urgent",dog_aai:"urgent",dog_civdd:"urgent",dog_cfx:"immediate",dog_meningitis:"urgent",feline_ate:"immediate",cat_cauda:"urgent",cat_fce:"urgent",cat_pelvic_fx:"immediate",dog_anaphylaxis:"immediate",dog_hemoabdomen:"immediate",cat_asthma:"immediate",cat_pneumothorax:"immediate",cat_anemia:"urgent"};
 const CASE_VISUAL={
   cat_uo:"沈鬱。下腹部を気にして痛がる。",
   dog_gdv:"落ち着かず立ったり座ったり。流涎し、腹部が膨らんでいる。",
@@ -1307,6 +1516,11 @@ const CASE_VISUAL={
   cat_cauda:"後躯を引きずり、尾は力なく垂れている。痛がって隠れたがる。",
   cat_fce:"片方の後ろ足を主に引きずる（左右差）。痛がる様子は乏しい。",
   cat_pelvic_fx:"横たわって後ろ足を動かさず、唸って痛がる。外傷の跡がある。",
+  dog_anaphylaxis:"ぐったりして倒れ込み、顔が腫れぼったく体に膨疹が出ている。吐いた跡。",
+  dog_hemoabdomen:"ぐったりして歯ぐきが白い。お腹が張って見える。",
+  cat_asthma:"うずくまり、首を伸ばして口を開け、お腹を使って吐くように呼吸する。咳き込む。",
+  cat_pneumothorax:"動かずにじっとして、速く浅い呼吸をしている。",
+  cat_anemia:(S)=>S.flags.has("p_transfuse")?"輸血後、呼吸が落ち着いてきた。":"ぐったりして歯ぐきが白い。呼吸は速いが、激しくあえぐ感じではない。",
 };
 // ⑥ 緊急度（トリアージ）定義。同じ主訴でも症例ごとに必要なテンポは違う、を学ばせる。
 const TEMPO_DEF={
@@ -1339,16 +1553,18 @@ function pcaBundle(){
   const has=(...ids)=>ids.some(i=>F.has(i));
   const causeDone = CF.has("cause_addressed")||has("p_ucath","p_surgery","p_gastrocen","p_ogtube")||CF.has("k_shift")||CF.has("gastropexy")||has("d_dexins","d_hydro","d_pred");
   const items=[
-    ["酸素化", has("o2","monitor"), "SpO₂を保ち、高濃度酸素の漫然投与（高酸素）は避ける"],
-    ["換気(ETCO₂/RR)", has("monitor","ex_tpr","o2"), "正常炭酸ガスを目標に。過換気は脳灌流を下げる"],
-    ["血圧/灌流", has("l_bp","bolus","bigbolus","fluids","monitor"), "MAPを保つ。輸液、必要なら昇圧"],
-    ["ECG/リズム", has("l_ecg","monitor"), "再CPA・不整脈を監視する"],
-    ["血糖", has("l_glu","l_chem"), "低血糖・高血糖いずれも回避する"],
-    ["電解質(K)", has("l_lyte","l_k","l_gas"), "特にKを再評価する"],
-    ["乳酸/酸塩基", has("l_lactate","l_gas"), "灌流回復の指標として追う"],
-    ["体温", has("ex_tpr","warm","cool"), "高体温は避け、低体温は緩徐に復温する"],
-    ["原因治療", causeDone, "可逆的原因を治療しないと再CPAしやすい"],
-    ["神経状態", has("ex_neuro"), "意識・脳幹反射・発作の有無を評価する"],
+    ["酸素化", has("o2","monitor"), "SpO₂ 94–98%を目標。高濃度酸素の漫然投与（高酸素）は避ける"],
+    ["換気(ETCO₂/PaCO₂)", has("monitor","ex_tpr","o2","p_intubate"), "正常炭酸ガス（ETCO₂ 35–45目安）。過換気＝低炭酸は脳灌流を下げる"],
+    ["血圧/灌流", has("l_bp","bolus","bigbolus","fluids","monitor","d_norad","d_dobu"), "MAP≥80（SAP≥90目安）。輸液、足りなければ昇圧（ノルアドレナリン等）"],
+    ["ECG/リズム", has("l_ecg","monitor"), "再CPA・不整脈を連続監視する"],
+    ["血糖", has("l_glu","l_chem"), "正常血糖を維持（低血糖・著明な高血糖を回避）"],
+    ["電解質(K)", has("l_lyte","l_k","l_gas"), "特にKを再評価し補正する"],
+    ["乳酸/酸塩基", has("l_lactate","l_gas"), "乳酸クリアランスを灌流回復の指標に追う"],
+    ["体温", has("ex_tpr","warm","cool"), "高体温は脳を悪化させる。正常〜軽度低体温に保ち、低体温は緩徐復温"],
+    ["原因治療", causeDone, "可逆的原因の治療継続が再CPA予防の要"],
+    ["神経状態", has("ex_neuro"), "意識・脳幹反射・瞳孔・発作の有無を評価する"],
+    ["鎮静/発作管理", has("d_midazolam","d_levetira","d_phenobarb","d_methadone","d_fentanyl","d_buprenor"), "適切な鎮痛・鎮静。発作は脳を悪化させるので抗痙攣薬で管理"],
+    ["輸液/容量・尿量", has("fluids","bolus","p_ucath","l_chem"), "容量を適正化し尿量を監視（過剰輸液・乏尿の両方を避ける）"],
   ];
   const done=items.filter(i=>i[1]).length;
   const bonus=Math.round(done/items.length*8);
@@ -1785,7 +2001,7 @@ function showResult(){
     <div class="card"><div class="sub">✅ 適切だった行動・診断・方針</div><div class="log">${critOk}${goodHtml}${dxLine}${dispoLine}</div></div>
     ${famck?`<div class="card" style="border-color:${famck.done>=7?'#1d6b50':famck.done>=4?'#6b561d':'#6b2330'}"><div class="sub">🔎 ${famck.title}　${famck.done}/${famck.total}</div><div class="log">${famck.items.map(it=>`<div class="e"><span class="rchip ${it[1]?'ok':'bad'}">${it[1]?'○':'×'}</span>${it[0]}</div>`).join('')}<div class="e tiny">同じ「後ろ足が動かない」でも、これらの身体検査を取りに行けば早期に血管性／神経性／整形外科性を分けられる。</div></div></div>`:''}
     ${neuro?`<div class="card" style="border-color:#2c5a78"><div class="sub">🧠 神経局在の解釈（客観データ→局在）</div><div class="log">${neuro.lines.map(l=>`<div class="e"><span class="rchip ${l[0]}">${l[0]==='ok'?'○':l[0]==='bad'?'×':l[0]==='warn'?'△':'·'}</span>${l[1]}</div>`).join('')}<div class="e tiny">客観的な検査データから自分で病変部位を絞り込む訓練。所見の解釈こそが診断推論の核心。</div></div></div>`:''}
-    ${pca?`<div class="card" style="border-color:${pca.done>=8?'#1d6b50':pca.done>=5?'#6b561d':'#6b2330'}"><div class="sub">🫀 蘇生後（PCA）ケア・バンドル　${pca.done}/${pca.total} 項目</div><div class="log">${pca.items.map(it=>`<div class="e"><span class="rchip ${it[1]?'ok':'bad'}">${it[1]?'○':'×'}</span>${it[0]}<div class="tiny">${it[2]}</div></div>`).join('')}<div class="e tiny">※ROSCはゴールではなく出発点。これらを継続監視し、可逆的原因の治療と再CPA予防を続ける。</div></div></div>`:''}
+    ${pca?`<div class="card" style="border-color:${pca.done/pca.total>=0.8?'#1d6b50':pca.done/pca.total>=0.5?'#6b561d':'#6b2330'}"><div class="sub">🫀 蘇生後（PCA）ケア・バンドル　${pca.done}/${pca.total} 項目</div><div class="log">${pca.items.map(it=>`<div class="e"><span class="rchip ${it[1]?'ok':'bad'}">${it[1]?'○':'×'}</span>${it[0]}<div class="tiny">${it[2]}</div></div>`).join('')}<div class="e tiny">※ROSCはゴールではなく出発点。これらを継続監視し、可逆的原因の治療と再CPA予防を続ける。</div></div></div>`:''}
     ${harmHtml?`<div class="card"><div class="sub">⛔ 禁忌・不適切だった行動</div><div class="log">${harmHtml}</div></div>`:''}
     ${advHtml?`<div class="card"><div class="sub">💊 薬剤副作用・医原性（減点）</div><div class="log">${advHtml}</div></div>`:''}
     ${unnecHtml?`<div class="card"><div class="sub">▽ 影響の小さかった/不要な行動</div><div class="log">${unnecHtml}</div></div>`:''}

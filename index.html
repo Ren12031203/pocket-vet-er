@@ -301,16 +301,19 @@ const LAB_NORM={ K:[3.5,5.5,"mEq/L"], Na:[145,155,"mEq/L"], Cl:[105,120,"mEq/L"]
   pH:[7.35,7.45,""], HCO3:[18,26,"mEq/L"], PCV:[30,45,"%"], TP:[6,8,"g/dL"],
   // 生化学パネル（肝・腎・蛋白・Ca/P）。種差は単一レンジで簡略化（教育用）。
   ALT:[10,100,"U/L"], ALP:[10,150,"U/L"], TBil:[0,0.4,"mg/dL"], Alb:[2.5,4.0,"g/dL"],
-  Glob:[2.5,4.5,"g/dL"], tCa:[9,11.8,"mg/dL"], Phos:[2.5,6.0,"mg/dL"], Mg:[1.5,2.5,"mg/dL"] };
+  Glob:[2.5,4.5,"g/dL"], tCa:[9,11.8,"mg/dL"], Phos:[2.5,6.0,"mg/dL"], Mg:[1.5,2.5,"mg/dL"],
+  // 凝固パネル（教育用の簡略レンジ）。PT/aPTT延長・血小板減少・フィブリノゲン消費でDIC像。
+  PT:[7,12,"秒"], aPTT:[12,22,"秒"], Plt:[200,500,"×10³/µL"], Fbg:[150,400,"mg/dL"] };
 // 生化学パネルの正常デフォルト（症例が値を持たない項目はこれで埋める）
-const CHEM_DEFAULTS={ ALT:55, ALP:70, TBil:0.2, Alb:3.2, Glob:3.2, tCa:10.2, Phos:4.0, Mg:2.0, BUN:24, Cre:1.2, Glu:100 };
+const CHEM_DEFAULTS={ ALT:55, ALP:70, TBil:0.2, Alb:3.2, Glob:3.2, tCa:10.2, Phos:4.0, Mg:2.0, BUN:24, Cre:1.2, Glu:100,
+  PT:9.0, aPTT:16.0, Plt:320, Fbg:250 };
 // 電解質パネル＝Na/K/Cl/iCa、ミネラルパネル＝総Ca/P/Mg（iCaは電解質側に重複表示）
 const LAB_DEF={ l_k:["K"], l_lyte:["Na","K","Cl","iCa"], l_gas:["pH","HCO3","K","lactate"],
   l_chem:["BUN","Cre","ALT","ALP","TBil","Alb","Glob","Glu"], l_mineral:["tCa","iCa","Phos","Mg"],
-  l_lactate:["lactate"], l_glu:["Glu"], l_pcvtp:["PCV","TP"] };
+  l_lactate:["lactate"], l_glu:["Glu"], l_pcvtp:["PCV","TP"], l_coag:["PT","aPTT","Plt","Fbg"] };
 function flagOf(a,v){ const n=LAB_NORM[a]; if(!n)return''; if(v>n[1])return'hi'; if(v<n[0])return'lo'; return''; }
 function fmtVal(a,v){ if(a==="pH")return v.toFixed(2);
-  if(["K","iCa","lactate","Cre","TBil","Alb","Glob","Mg","tCa","Phos","TP"].includes(a))return v.toFixed(1);
+  if(["K","iCa","lactate","Cre","TBil","Alb","Glob","Mg","tCa","Phos","TP","PT","aPTT"].includes(a))return v.toFixed(1);
   return Math.round(v); }
 function labText(id){
   const keys=LAB_DEF[id]; if(!keys)return null;
@@ -449,8 +452,8 @@ const CASES = {
       monitor:{text:"モニターを装着。HR/SpO₂/RR/血圧を表示。徐脈傾向。",s:3,time:30,reveal:["HR","SBP","SpO2","RR"],flag:["monitored"],tag:"good"},
       ivc:{text:"静脈路を確保した。",s:5,time:60,flag:["iv"],tag:"critical",miss:-12},
       fluids:{text:"維持輸液を開始した。",s:3,time:30},
-      bolus:{text:"少量の晶質液ボーラスを実施。末梢冷感と血圧がやや改善。",s:5,time:30,tag:"good",need:[{f:["iv"],pen:-4,msg:"静脈路確保前に輸液を始めようとした。"}]},
-      bigbolus:{text:"大量急速輸液を実施。猫では過剰輸液に注意。",s:1,time:30},
+      bolus:{text:"少量の晶質液ボーラスを実施した。",s:5,time:30,tag:"good",need:[{f:["iv"],pen:-4,msg:"静脈路確保前に輸液を始めようとした。"}]},
+      bigbolus:{text:"大量急速輸液を実施した。",s:1,time:30},
       warm:{text:"保温を開始。低体温傾向に対応。",s:3,time:30,reveal:["temp"],tag:"good"},
       ex_temp:{text:"直腸温 36.5℃（低体温）。",s:1,time:60,reveal:["temp"]},
       l_ecg:{text:"P波の平低化〜消失、テント状T波、QRS幅延長、徐脈。（数値Kは電解質検査で確認）",s:8,time:120,reveal:["ecg"],flag:["hyperk_known"],tag:"critical",miss:-16},
@@ -486,7 +489,7 @@ const CASES = {
     signalment:"犬 6歳 去勢雄 グレートデン 48kg",
     open:"夕食後に落ち着かず、腹がパンパンに膨れてきた。吐こうとするが何も出ない。",
     hidden:{HR:160,SBP:78,SpO2:95,RR:48,temp:38.2,lactate:6.5},
-    labs0:{K:4.2,Na:146,Cl:110,iCa:1.25,BUN:30,Cre:1.4,Glu:120,pH:7.28,HCO3:16,PCV:55,TP:7.8},
+    labs0:{K:4.2,Na:146,Cl:110,iCa:1.25,BUN:30,Cre:1.4,Glu:120,pH:7.28,HCO3:16,PCV:55,TP:7.8,PT:14,aPTT:25,Plt:130},
     interp:{ lactate:(S)=>{ const decomp=S.flags.has("p_gastrocen")||S.flags.has("p_ogtube"),
         resus=S.flags.has("bolus")||S.flags.has("bigbolus")||S.flags.has("fluids"), surg=S.flags.has("p_surgery"); const L=S.h.lactate;
       if(surg)return L>6?"術後も高乳酸：再灌流障害・胃壁壊死・持続ショック・DIC・敗血症性腹膜炎を考慮し、ECG/凝固/腹水/AKIを評価。":"術後の乳酸は低下傾向。再灌流とショック離脱の指標として継続評価。";
@@ -519,7 +522,7 @@ const CASES = {
       monitor:{text:"モニターを装着。頻脈。",s:3,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
       o2:{text:"酸素投与を開始。",s:2,time:30},
       ivc:{text:"太い静脈路を確保した（できれば両前肢）。",s:5,time:60,flag:["iv"],tag:"critical",miss:-12},
-      bolus:{text:"晶質液ショックボーラスを開始。循環を補正。",s:7,time:30,tag:"critical",miss:-12,flag:["resus"],need:[{f:["iv"],pen:-4,msg:"静脈路確保前に輸液を始めようとした。"}]},
+      bolus:{text:"晶質液ショックボーラスを実施した。",s:7,time:30,tag:"critical",miss:-12,flag:["resus"],need:[{f:["iv"],pen:-4,msg:"静脈路確保前に輸液を始めようとした。"}]},
       bigbolus:{text:"大量急速輸液を実施。",s:4,time:30,need:[{f:["iv"],pen:-4,msg:"静脈路確保前。"}]},
       fluids:{text:"維持輸液を開始した。",s:2,time:30},
       d_buprenor:{text:"オピオイドで鎮痛した。",s:3,time:60,tag:"good"},
@@ -530,7 +533,7 @@ const CASES = {
       l_lactate:{s:4,time:60,reveal:["lactate"],tag:"good"},
       l_pcvtp:{text:"",s:2,time:120},
       l_ecg:{text:"散発する心室性期外収縮（VPC）を認める。",s:3,time:120,flag:["vpc_seen"],tag:"good"},
-      l_coag:{text:"PT・APTTの延長と血小板の減少を認める。",s:3,time:120,tag:"good"},
+      l_coag:{text:"",s:3,time:120,tag:"good"},
       p_gastrocen:{text:"経皮で胃を穿刺・減圧。ガスが抜け腹圧が低下。",s:6,time:120,flag:["decomp"],tag:"good"},
       p_ogtube:{text:"胃管で減圧を試みた（捻転では通過困難なことあり）。",s:5,time:120,flag:["decomp"],tag:"good"},
       p_surgery:{text:"開腹し整復・胃固定（gastropexy）を行った。根治治療。術後は乳酸・ECG/VPC・凝固/DIC・AKI・腹水/腹膜炎・疼痛管理・ICU管理を評価。",s:10,time:600,tag:"critical",miss:-20,flag:["gastropexy"],
@@ -594,8 +597,10 @@ const CASES = {
     physiology(S){ const fluids=S.flags.has("fluids")||S.flags.has("bolus")||S.flags.has("bigbolus");
       S.h.SBP+=(((fluids?108:84))-S.h.SBP)*0.08; S.h.HR+=(((fluids?92:70))-S.h.HR)*0.1;
       if(S.flags.has("d_dextrose"))S.h.Glu+=2; else if(!fluids)S.h.Glu-=0.3;
-      if(fluids){S.h.K-=0.012;S.h.Na+=0.05;S.h.BUN=Math.max(22,S.h.BUN-0.15);} else S.h.K+=0.004;
-      S.h.Glu=clamp(S.h.Glu,20,200); S.h.K=clamp(S.h.K,3,9.5); S.h.Na=clamp(S.h.Na,118,150);
+      // 高K動態は共有エンジンへ：ベース上昇(rise) − 輸液による希釈/排泄(dilution)。閉塞解除は無関係なのでフラグ無効化。
+      PHYSIO.applyHyperkalemia(S,{rise:0.004,dilution:0.016,insulinShift:0,relievedFlag:"__none",decompFlag:"__none",floor:3,ceil:9.5});
+      if(fluids){S.h.Na+=0.05;S.h.BUN=Math.max(22,S.h.BUN-0.15);}
+      S.h.Glu=clamp(S.h.Glu,20,200); S.h.Na=clamp(S.h.Na,118,150);
       S.h.SpO2+=(((S.flags.has("o2")?99:98))-S.h.SpO2)*0.2; },
     dz:["hypoadrenocorticism","hyperkalemia","hyponatremia","hypoglycemia","prerenal_azotemia"],
     dxReq:{comorbid:["dx_hyperk","dx_hypoglycemia"],wrongIfOnly:["dx_hge","dx_fb","dx_pancreatitis"]},
@@ -620,8 +625,8 @@ const CASES = {
       ex_abd:{text:"腹部は軽度の違和感のみで、外科腹症に乏しい。",s:2,time:60},
       monitor:{text:"モニター装着。徐脈傾向。",s:2,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
       ivc:{text:"静脈路を確保。",s:5,time:60,flag:["iv"],tag:"critical",miss:-12},
-      fluids:{text:"晶質液で循環を補正（低Na補正速度に注意）。",s:6,time:30,tag:"critical",critLabel:"輸液で循環補正",miss:-12,need:[{f:["iv"],pen:-4,msg:"静脈路確保前。"}]},
-      bolus:{text:"晶質液ボーラスを実施。",s:4,time:30,tag:"good"},
+      fluids:{text:"晶質液で循環を補正した。",s:6,time:30,tag:"critical",critLabel:"輸液で循環補正",miss:-12,need:[{f:["iv"],pen:-4,msg:"静脈路確保前。"}]},
+      bolus:{text:"晶質液ボーラスを実施した。",s:4,time:30,tag:"good"},
       warm:{text:"保温を開始。",s:2,time:30},
       d_dextrose:{text:"ブドウ糖を静注し低血糖を補正。血糖再評価を。",s:6,time:60,flag:["glu_treated"],tag:"good"},
       l_cbc:{text:"軽度非再生性貧血。著明な炎症像はなく、ストレス白血球像（好中球増多・リンパ球/好酸球減少）を欠く。",s:6,time:120,flag:["no_stress_leukogram"],tag:"good"},
@@ -632,7 +637,8 @@ const CASES = {
       l_chem:{s:6,time:120,flag:["azotemia"],tag:"good"},
       l_ua:{text:"尿比重 1.018。",s:4,time:120,tag:"good"},
       l_us:{text:"腹部超音波：副腎は小型傾向。外科疾患は指摘されない。",s:3,time:180,tag:"good"},
-      l_abd:{text:"腹部X線：心陰影は小さめ（microcardia）、後大静脈は細い。外科腹症の所見はない。",s:2,time:180},
+      l_thorax:{text:"胸部X線：心陰影が小さい（microcardia）。肺動脈・肺血管陰影が乏しく肺野は乏血性。後大静脈は細い。",s:4,time:180,reveal:["xray"],abn:true,flag:["microcardia_seen"],tag:"good"},
+      l_abd:{text:"腹部X線：肝は小さめ（microhepatia）、後大静脈は細い。閉塞・遊離ガス・腹水など外科腹症の所見はない。",s:2,time:180,abn:true},
       l_cortisol:{text:"基礎コルチゾール 1.5 µg/dL（基準: >2 µg/dL で副腎機能低下を除外）。低値。",s:8,time:120,flag:["cortisol_sampled"],tag:"critical",critGroup:"adrenal_workup",critLabel:"副腎機能評価（基礎コルチゾール/ACTH刺激）",miss:-14},
       l_acthstim:{text:"ACTH刺激試験：刺激前 1.5 → 刺激後 1.8 µg/dL（基準: 刺激後 6–17）。刺激後の上昇に乏しい。",s:10,time:120,flag:["cortisol_sampled","acth_done"],tag:"critical",critGroup:"adrenal_workup",critLabel:"副腎機能評価（基礎コルチゾール/ACTH刺激）",miss:-14},
       l_acth:{text:"内因性ACTH 高値。",s:4,time:120,flag:["cortisol_sampled"],tag:"good"},
@@ -642,7 +648,7 @@ const CASES = {
       d_docp:{text:"DOCP（ミネラルコルチコイド）を投与。確定後/強い疑いでの長期管理として適切。",s:5,time:60,tag:"good"},
       d_insulin:{text:"速効型インスリンを投与した。",s:-12,time:60,tag:"harmful",verdict:"低血糖を伴う患者にインスリン単独は危険。Addisonの高Kは輸液で改善することが多い。"},
     },
-    truthImg:{region:"abdomen", text:"外科腹症やGDVは認めない。副腎は小型傾向、心陰影は小さめ（microcardia）。",
+    truthImg:{region:"abdomen", text:"外科腹症やGDVは認めない。副腎は小型傾向、肝は小さめ（microhepatia）で後大静脈は細い。",
       ct:{text:"CT：明らかな外科疾患なし。副腎小型傾向。",s:-8,time:600,abn:false,tag:"harmful",verdict:"安定化と電解質/血糖/副腎機能評価が優先。鎮静/麻酔を要するCTは不要。"}},
     finalNote:"波のある消化器症状＋ストレス後の悪化＋相対的徐脈＋脱水から、見た目は胃腸炎でも副腎皮質機能低下症を疑う。低Na/高K（Na:K比低下）・低血糖・腎前性高窒素血症・不適切な尿比重・ストレス白血球像の欠如が手がかり。静脈路＋輸液＋低血糖補正で安定化し、ステロイド投与前に基礎コルチゾール/ACTH刺激の採血を。救急ではデキサメタゾン（測定に干渉しにくい）を選び、確定後にDOCP/長期管理へ。胃腸炎として帰宅させるのは危険。",
   },
@@ -657,8 +663,10 @@ const CASES = {
     physiology(S){ const fluids=S.flags.has("bolus")||S.flags.has("bigbolus")||S.flags.has("fluids");
       S.h.SBP+=(((fluids?100:42))-S.h.SBP)*0.10; S.h.HR+=(((fluids?100:70))-S.h.HR)*0.1;
       if(S.flags.has("d_dextrose"))S.h.Glu+=3; else S.h.Glu-=0.4;
-      if(fluids){S.h.K-=0.02;S.h.Na+=0.08;S.h.lactate-=0.03;S.h.BUN=Math.max(30,S.h.BUN-0.2);} else {S.h.K+=0.012;S.h.lactate+=0.015;}
-      S.h.Glu=clamp(S.h.Glu,15,200); S.h.K=clamp(S.h.K,3,12); S.h.lactate=clamp(S.h.lactate,1,12); S.h.Na=clamp(S.h.Na,110,150);
+      // 高K動態は共有エンジンへ：危機例は上昇・希釈とも大きめ。閉塞解除は無関係。
+      PHYSIO.applyHyperkalemia(S,{rise:0.012,dilution:0.032,insulinShift:0,relievedFlag:"__none",decompFlag:"__none",floor:3,ceil:12});
+      if(fluids){S.h.Na+=0.08;S.h.lactate-=0.03;S.h.BUN=Math.max(30,S.h.BUN-0.2);} else {S.h.lactate+=0.015;}
+      S.h.Glu=clamp(S.h.Glu,15,200); S.h.lactate=clamp(S.h.lactate,1,12); S.h.Na=clamp(S.h.Na,110,150);
       S.h.SpO2+=(((S.flags.has("o2")?99:98))-S.h.SpO2)*0.2; },
     dz:["addisonian_crisis","hypoadrenocorticism","hypovolemia","shock","hyperkalemia","hyponatremia","hypoglycemia","prerenal_azotemia","metabolic_acidosis"],
     dxReq:{comorbid:["dx_hyperk","dx_hypoglycemia"],wrongIfOnly:["dx_hge","dx_fb","dx_gdv"]},
@@ -681,9 +689,9 @@ const CASES = {
       ex_abd:{text:"腹部は軽度の違和感のみ。強い限局痛・腫瘤・鼓音性の膨満はない。",s:3,time:60,tag:"good"},
       monitor:{text:"モニター装着。低血圧・相対的徐脈。",s:3,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
       ivc:{text:"静脈路を確保。",s:5,time:60,flag:["iv"],tag:"critical",miss:-14},
-      bolus:{text:"晶質液ショックボーラスで循環を補正（Na補正速度に注意）。輸液で血圧・K・乳酸が改善しうる。",s:8,time:30,tag:"critical",critLabel:"輸液で循環補正",miss:-16,need:[{f:["iv"],pen:-4,msg:"静脈路確保前。"}]},
-      fluids:{text:"晶質液の輸液を開始。",s:4,time:30,tag:"good"},
-      bigbolus:{text:"大量急速輸液。循環補正に寄与するがNa補正速度に注意。",s:3,time:30,need:[{f:["iv"],pen:-4,msg:"静脈路確保前。"}]},
+      bolus:{text:"晶質液ショックボーラスを実施した。",s:8,time:30,tag:"critical",critLabel:"輸液で循環補正",miss:-16,need:[{f:["iv"],pen:-4,msg:"静脈路確保前。"}]},
+      fluids:{text:"晶質液の輸液を開始した。",s:4,time:30,tag:"good"},
+      bigbolus:{text:"大量急速輸液を実施した。",s:3,time:30,need:[{f:["iv"],pen:-4,msg:"静脈路確保前。"}]},
       warm:{text:"保温を開始。",s:2,time:30},
       d_dextrose:{text:"ブドウ糖を静注し低血糖を補正。血糖再評価を。",s:7,time:60,flag:["glu_treated"],tag:"critical",critLabel:"低血糖の補正",miss:-12},
       d_calcium:{text:"グルコン酸カルシウムを投与。徐脈＋ECG変化を伴う高Kの心筋保護として適切（Kは下げない）。",s:8,time:60,fx:S=>{S.caT=15*60;},flag:["ca_protect"],tag:"good"},
@@ -699,7 +707,8 @@ const CASES = {
       l_ua:{text:"尿比重が脱水の割に不適切に低い。",s:3,time:120,tag:"good"},
       l_ecg:{text:"徐脈、T波の増高、P波の低振幅。（数値Kは電解質検査で確認）",s:6,time:120,reveal:["ecg"],flag:["hyperk_known"],tag:"good"},
       l_us:{text:"AFAST：明らかな腹腔内出血や外科疾患なし。副腎は小型傾向。",s:3,time:120,tag:"good"},
-      l_abd:{text:"腹部X線：外科腹症・GDVは否定的。microcardia傾向。",s:2,time:180},
+      l_thorax:{text:"胸部X線：心陰影が小さい（microcardia）。肺血管陰影が乏しく肺野は乏血性。後大静脈は細い。食道に空気を含む軽度拡張を伴う。",s:4,time:180,reveal:["xray"],abn:true,flag:["microcardia_seen"],tag:"good"},
+      l_abd:{text:"腹部X線：外科腹症・GDVは否定的。肝は小さめ（microhepatia）で後大静脈は細い。",s:2,time:180,abn:true},
       l_cortisol:{text:"基礎コルチゾール 1.2 µg/dL（基準: >2 µg/dL で除外）。低値。",s:8,time:120,flag:["cortisol_sampled"],tag:"critical",critGroup:"adrenal_workup",critLabel:"副腎機能評価（基礎コルチゾール/ACTH刺激）",miss:-12},
       l_acthstim:{text:"ACTH刺激試験：刺激前 1.2 → 刺激後 1.5 µg/dL（基準: 刺激後 6–17）。上昇に乏しい。（採血は救急初期に）",s:9,time:120,flag:["cortisol_sampled","acth_done"],tag:"critical",critGroup:"adrenal_workup",critLabel:"副腎機能評価（基礎コルチゾール/ACTH刺激）",miss:-12},
       l_acth:{text:"内因性ACTH 高値。",s:3,time:120,flag:["cortisol_sampled"],tag:"good"},
@@ -815,7 +824,7 @@ const CASES = {
       ex_temp:{text:"直腸温 39.3℃（発熱）。",s:2,time:60,reveal:["temp"],tag:"good"},
       monitor:{text:"モニター装着。頻脈。",s:1,time:30,reveal:["HR","SBP","SpO2","RR"]},
       ivc:{text:"静脈路を確保。",s:4,time:60,flag:["iv"],tag:"good"},
-      fluids:{text:"晶質液で循環・脱水を補正（膵炎管理の柱）。",s:6,time:30,tag:"critical",critLabel:"輸液で補正",miss:-12},
+      fluids:{text:"晶質液で循環・脱水を補正した。",s:6,time:30,tag:"critical",critLabel:"輸液で補正",miss:-12},
       bolus:{text:"晶質液ボーラスで循環補正。",s:3,time:30,tag:"good"},
       d_maropit:{text:"マロピタントで制吐。膵炎の支持療法として適切。",s:4,time:60,tag:"good"},
       d_buprenor:{text:"ブプレノルフィンで鎮痛。腹痛管理として重要。",s:5,time:60,tag:"good"},
@@ -1069,7 +1078,7 @@ const CASES = {
       d_clopidog:{text:"クロピドグレルで抗血小板療法を開始（FAT CAT試験）。",s:8,time:60,flag:["antithrombotic"],tag:"critical",critGroup:"antithromb",critLabel:"抗血栓治療を開始",miss:-12},
       d_heparin:{text:"ヘパリン（低分子量含む）で抗凝固を開始。",s:7,time:60,flag:["antithrombotic"],tag:"critical",critGroup:"antithromb",critLabel:"抗血栓治療を開始",miss:-12},
       d_aspirin:{text:"アスピリンで抗血小板。クロピドグレルが優先される。",s:3,time:60,flag:["antithrombotic"],tag:"good"},
-      bigbolus:{text:"大量急速輸液を実施。基礎心筋症がある猫では肺水腫を誘発しうる。",s:-8,time:30,tag:"harmful",verdict:"ATEの背景にある心筋症では、大量急速輸液はうっ血性心不全・肺水腫を悪化させる。輸液は慎重に。",need:[{f:["heart_abn"],pen:0}]},
+      bigbolus:{text:"大量急速輸液を実施した。",s:-8,time:30,tag:"harmful",verdict:"ATEの背景にある心筋症では、大量急速輸液はうっ血性心不全・肺水腫を悪化させる。輸液は慎重に。",need:[{f:["heart_abn"],pen:0}]},
       d_acepro:{text:"アセプロマジンで血管拡張を期待して投与。低血圧・虚脱を招きうる。",s:-6,time:60,tag:"harmful",verdict:"末梢血管拡張を狙うアセプロマジンは低血圧を助長し、ショック傾向の猫では危険。"},
       l_echo:{text:"心エコー：左室肥大と左房拡大、左房内に渦流（もやもやエコー）。",s:8,time:180,flag:["echo_cm"],tag:"critical",critLabel:"心エコーで基礎心疾患を評価",miss:-10},
       l_fast:{text:"TFAST/AFAST：胸水は少量。左房は拡大して見える。",s:4,time:120,flag:["fast_done"],tag:"good"},
@@ -1267,7 +1276,7 @@ const CASES = {
     id:"dog_hemoabdomen", icon:"🦮", title:"急に虚脱し歯ぐきが白い犬（腹腔内出血）", level:"★★★", patient:"dog",
     signalment:"犬 10歳 避妊雌 ゴールデンレトリバー 30kg", open:"今朝から急にふらつき、歯ぐきが白い。一度倒れた。",
     hidden:{HR:165,SBP:72,SpO2:96,RR:40,temp:37.8,lactate:4.8},
-    labs0:{K:4.4,Na:147,Cl:112,iCa:1.15,BUN:30,Cre:1.5,Glu:120,pH:7.29,HCO3:17,PCV:28,TP:4.8,lactate:4.8,Alb:2.2,Glob:2.6},
+    labs0:{K:4.4,Na:147,Cl:112,iCa:1.15,BUN:30,Cre:1.5,Glu:120,pH:7.29,HCO3:17,PCV:28,TP:4.8,lactate:4.8,Alb:2.2,Glob:2.6,PT:15,aPTT:28,Plt:110,Fbg:140},
     physiology(S){ const f=S.flags.has("fluids")||S.flags.has("bolus"); const big=S.flags.has("bigbolus"); const tx=S.flags.has("p_transfuse"); const surg=S.flags.has("p_surgery");
       const tBP=surg?108:(tx?96:(f?88:72)); S.h.SBP+=((tBP)-S.h.SBP)*0.08; S.h.HR+=(((surg?110:150))-S.h.HR)*0.05;
       if(tx)S.h.PCV=Math.min(38,S.h.PCV+0.05); if(big&&!surg)S.h.PCV=Math.max(20,S.h.PCV-0.04);
@@ -1288,8 +1297,8 @@ const CASES = {
       monitor:{text:"モニター装着。頻脈・低血圧。",s:2,time:30,reveal:["HR","SBP","SpO2","RR"],tag:"good"},
       o2:{text:"酸素を投与。",s:2,time:30,tag:"good"},
       ivc:{text:"太い静脈路を確保。",s:5,time:60,flag:["iv"],tag:"critical",critLabel:"静脈路確保",miss:-10},
-      bolus:{text:"晶質液ボーラスで循環を補正（許容的低血圧を意識）。",s:5,time:30,flag:["resus"],tag:"good",need:[{f:["iv"],pen:-4,msg:"静脈路確保前に輸液を始めようとした。"}]},
-      bigbolus:{text:"大量急速輸液。希釈性凝固障害・血圧上昇による再出血を招きうる。",s:-4,time:30,tag:"harmful",verdict:"活動性腹腔内出血では大量急速輸液は再出血・希釈を助長。少量ずつ＋許容的低血圧、必要なら輸血・外科止血を。"},
+      bolus:{text:"晶質液ボーラスで循環を補正した。",s:5,time:30,flag:["resus"],tag:"good",need:[{f:["iv"],pen:-4,msg:"静脈路確保前に輸液を始めようとした。"}]},
+      bigbolus:{text:"大量急速輸液を実施した。",s:-4,time:30,tag:"harmful",verdict:"活動性腹腔内出血では大量急速輸液は再出血・希釈を助長。少量ずつ＋許容的低血圧、必要なら輸血・外科止血を。"},
       l_pcvtp:{text:"",s:7,time:120,reveal:["PCV"],flag:["low_pcv"],tag:"critical",critLabel:"PCV/TPの評価",miss:-10},
       l_fast:{text:"AFAST：腹腔内に多量の遊離液体。腹水スコア高値。",s:8,time:120,flag:["free_fluid"],tag:"critical",critLabel:"AFASTで腹腔内遊離液体を確認",miss:-12},
       p_abdomino:{text:"腹腔穿刺：凝固しない血液を吸引（腹腔内出血）。",s:8,time:120,flag:["nonclotting_blood"],tag:"critical",critLabel:"腹腔穿刺で非凝固血液を確認",miss:-12},
@@ -1297,7 +1306,7 @@ const CASES = {
       l_bloodtype:{text:"血液型を判定（必要ならクロスマッチ）。輸血の適合性を確認できる。",s:3,time:120,flag:["bloodtype_done"],tag:"good"},
       p_transfuse:{text:"輸血を実施（重度貧血/持続出血に対し）。",s:7,time:120,flag:["transfused"],tag:"good",need:[{f:["bloodtype_done"],pen:-4,msg:"輸血前に血液型/クロスマッチで適合を確認する。"}]},
       p_surgery:{text:"開腹して止血（脾摘など）。根本的な出血源の制御。",s:8,time:600,tag:"critical",critLabel:"外科的止血（出血源の制御）",miss:-12,need:[{f:["iv"],pen:-6,msg:"麻酔導入前に静脈路と循環安定化を。"}]},
-      l_coag:{text:"凝固系を評価（消費性凝固障害の有無）。",s:3,time:120,tag:"good"},
+      l_coag:{text:"",s:3,time:120,tag:"good"},
       d_meloxicam:{text:"NSAIDを投与。出血・ショックでは禁忌。",s:-6,time:60,tag:"harmful",verdict:"活動性出血・低血圧へのNSAIDは止血障害・腎障害を悪化させる。"},
     },
     truthImg:{region:"abdomen", text:"腹腔内に多量の遊離液体（出血）と脾臓の腫瘤。外傷性所見はない。",
@@ -1336,7 +1345,7 @@ const CASES = {
       l_pcvtp:{text:"",s:2,time:120,flag:["pcv_normal"],tag:"good",norm:true},
       p_thoraco:{text:"胸腔穿刺を試みたが、液体も空気も引けない（適応がない）。",s:-4,time:120,tag:"harmful",verdict:"下気道疾患に胸腔穿刺の適応はない。呼吸様式・聴診・TFASTで胸腔病変がないことを確認してから判断する。"},
       d_furosem:{text:"フロセミドを投与。心不全を想定した利尿だが、下気道疾患では脱水を招くだけ。",s:-4,time:60,tag:"harmful",verdict:"心原性でない呼吸困難に漫然とフロセミドを使うと脱水・電解質異常を招く。心雑音/TFASTで心原性を確認してから。"},
-      bigbolus:{text:"大量急速輸液を実施。呼吸器疾患では肺水腫を助長しうる。",s:-5,time:30,tag:"harmful",verdict:"呼吸困難の猫への積極的輸液は有害。まず酸素・気管支拡張薬で安定化する。"},
+      bigbolus:{text:"大量急速輸液を実施した。",s:-5,time:30,tag:"harmful",verdict:"呼吸困難の猫への積極的輸液は有害。まず酸素・気管支拡張薬で安定化する。"},
     },
     truthImg:{region:"thorax", text:"気管支パターンと過膨張。胸水・気胸・腫瘤はない。",
       ct:{text:"画像は気管支パターンが主体。安定化（酸素・気管支拡張）が優先。",s:-2,time:600,abn:true,tag:"harmful",verdict:"高度画像より、まず酸素・気管支拡張薬での安定化を優先する。"}},
@@ -1371,7 +1380,7 @@ const CASES = {
       p_thoraco:{text:"胸腔穿刺で空気を吸引すると呼吸が楽になる。診断的かつ治療的。",s:10,time:120,flag:["tapped"],tag:"critical",critLabel:"胸腔穿刺で脱気",miss:-14},
       p_chesttube:{text:"再貯留・大量なら胸腔ドレーンを留置。",s:5,time:180,flag:["chesttube"],tag:"good"},
       d_furosem:{text:"フロセミドを投与。気胸に利尿は無意味で脱水を招く。",s:-4,time:60,tag:"harmful",verdict:"気胸は脱気が治療。利尿薬の適応はない。聴診・TFASTで胸腔の空気を捉える。"},
-      bigbolus:{text:"大量急速輸液を実施。呼吸困難の猫には不要・有害。",s:-4,time:30,tag:"harmful",verdict:"呼吸困難の猫への積極輸液は有害。まず酸素と脱気。"},
+      bigbolus:{text:"大量急速輸液を実施した。",s:-4,time:30,tag:"harmful",verdict:"呼吸困難の猫への積極輸液は有害。まず酸素と脱気。"},
     },
     truthImg:{region:"thorax", text:"胸腔内に空気（気胸）と肺の虚脱。胸水や腫瘤はない。",
       ct:{text:"CT：気胸と肺虚脱。ただし不安定例では撮影前に脱気・安定化を。",s:-2,time:600,abn:true,tag:"harmful",verdict:"不安定な気胸でCTを優先せず、TFAST＋胸腔穿刺を先に。"}},
@@ -1918,8 +1927,8 @@ function render(){
   const showV=k=>(S.revealed.has(k)&&!isNaN(S.disp[k]));            // 手でも分かる（HR/RR：TPRでも可）
   const show=k=>(S.flags.has("monitor")&&S.revealed.has(k)&&!isNaN(S.disp[k])); // 機器が要る（SBP/SpO₂）
   set('nHR',S.arrest?"0":showV("HR")?Math.round(S.disp.HR):"–");
-  if(S.arrest)set('nBP',"–"); else if(show("SBP")){const sb=Math.round(S.disp.SBP),db=Math.round(S.disp.SBP*0.62);
-    document.getElementById('nBP').innerHTML=sb+"/"+db;} else set('nBP',"–");
+  if(S.arrest)set('nBP',"–"); else if(show("SBP")){const sb=Math.round(S.disp.SBP),db=Math.round(S.disp.SBP*0.62),mp=Math.round(db+(sb-db)/3);
+    document.getElementById('nBP').innerHTML=sb+"/"+db+' <span style="font-size:.62em;opacity:.85">('+mp+')</span>';} else set('nBP',"–");
   set('nSpO2',S.arrest?"–":show("SpO2")?Math.round(S.disp.SpO2):"–");
   set('nRR',S.arrest?"0":showV("RR")?Math.round(S.disp.RR):"–");
   // peri-arrest 警告（CPA前段階）
@@ -2086,6 +2095,9 @@ function artSample(p){ // 動脈圧：立ち上がり＋ディクロティック
   return v-0.3;
 }
 function plethSample(p){ let v=Math.max(0,Math.sin(Math.PI*Math.min(1,p/0.5)))*0.8+0.08*g(p,0.6,0.05); return v-0.35; }
+// PEA（無脈性電気活動）に特徴的な、幅広・緩徐（agonal）な組織化複合波。P波は乏しく、QRSは幅広・slurred、T波も幅広。
+// 出典：Textbook of Small Animal Emergency Medicine, Ch.150（RECOVER準拠：一定の反復複合波・レート<200・脈なし＝PEA）。
+function peaSample(p){ let v=0; v+=0.05*g(p,0.12,0.05); v+=0.85*g(p,0.34,0.05); v+=-0.28*g(p,0.50,0.06); v+=0.20*g(p,0.70,0.10); return v; }
 function g(x,m,s){const d=x-m;return Math.exp(-(d*d)/(2*s*s));}
 
 // ---------- 診断・方針 ----------
@@ -2112,7 +2124,10 @@ function openFinal(){
     <button class="btn primary" style="margin-bottom:8px" onclick="closeSheet();finalize()">確定して採点</button>
     <button class="btn ghost" onclick="closeSheet()">戻る</button>`);
 }
-function finalize(){ if(timer)clearInterval(timer); showResult(); }
+function finalize(){ if(timer)clearInterval(timer); if(cprRaf){cancelAnimationFrame(cprRaf);cprRaf=null;}
+  document.getElementById('cpr').classList.add('hide'); showResult(); }
+// CPRでROSCに至らず最終評価へ進む場合は救命できなかった（死亡）として評価する
+function cprToFinal(){ S.dead=true; if(S.cpr)S.cpr.status="terminated"; finalize(); }
 
 // ---------- 評価 ----------
 function snapStr(id){ const s=S.snap[id]; if(!s)return''; return `<span class="vsnap">[${fmt(s.t)}] HR${s.HR}/SAP${s.SBP}/SpO₂${s.SpO2}/${s.temp.toFixed(1)}℃</span>`; }
@@ -2166,6 +2181,10 @@ function showResult(){
     <div style="text-align:center;margin:6px 0 10px"><div class="pill">結果</div>
       <div class="scoreBig" style="color:${gcol}">${grade}</div>
       <div class="sub">スコア ${pct} 点　／　所要 ${fmt(S.t)}${S.dead?'　/　救命できず':S.rosc?'　/　一度心停止':''}</div></div>
+    ${S.cpaCtx?`<div class="card" style="border-color:#6b2330"><div class="sub" style="color:var(--red)">🫀 心停止（CPA）に至った直接の原因</div><div class="log">
+      <div class="e"><span class="rchip bad">直接原因</span><b>${causeLabel(S.cpaCtx.category)}</b>${S.cpaCtx.iatrogenic?'（医原性・回避可能だった可能性）':REVERSIBLE_CAUSES.includes(S.cpaCtx.category)?'（可逆的＝早期に是正すれば回避可能）':''}</div>
+      <div class="e tiny">初期リズム：${rhythmName(S.cpaCtx.rhythm||'unknown')}　／　転帰：${S.dead?'蘇生に至らず':S.rosc?'ROSC後にPCA管理':'—'}</div>
+      <div class="e tiny">${S.cpaCtx.iatrogenic?'治療介入が引き金。投与前の適応・禁忌の確認を。':REVERSIBLE_CAUSES.includes(S.cpaCtx.category)?'CPA前段階（peri-arrest）で原因を是正できれば停止は防げた可能性が高い。':'バイタルの悪化サインを早期に捉え介入することが鍵。'}</div></div></div>`:''}
     ${triage?`<div class="card"><div class="sub">⏱ 緊急度（トリアージ）の評価</div><div class="log"><div class="e"><span class="rchip ${triage.chip}">${triage.TD.label}</span><span style="color:${triage.TD.col}">${triage.TD.desc}</span></div><div class="e tiny">${triage.note}</div></div></div>`:''}
     ${missHtml?`<div class="card"><div class="sub">❗ 必要だったのに行わなかったこと</div><div class="log">${missHtml}</div></div>`:''}
     <div class="card"><div class="sub">✅ 適切だった行動・診断・方針</div><div class="log">${critOk}${goodHtml}${dxLine}${dispoLine}</div></div>
@@ -2290,10 +2309,12 @@ function cprStartBLS(){ const c=S.cpr; if(c.status==="cpa_suspected"){c.status="
 function cprCompress(){ const c=S.cpr; if(c.q.compStarted)return;
   c.status="bls_active"; c.q.compStarted=true;c.q.rate=110;c.q.depth="adequate";c.q.recoil=true;c.q.duty=true;
   c.score+=20;c.roscProb+=10; cprLog("胸骨圧迫を開始。100–120/分・胸郭1/3〜1/2・完全リコイル・50:50を目標。"); cprEtco2(); renderCPR(); }
-function cprTechModal(){ let h=`<h3>圧迫位置（胸郭形態：${CHEST_LABEL[S.cpr.m.chest]}）<button class="x" onclick="closeSheet()">×</button></h3>`;
-  TECHNIQUES.forEach(t=>h+=`<button class="item" onclick="cprTech('${t[0]}')"><span class="tick">＋</span><span>${t[1]}</span></button>`);
+function cprTechModal(){ const cur=S.cpr.q.technique; let h=`<h3>圧迫位置（胸郭形態：${CHEST_LABEL[S.cpr.m.chest]}）<button class="x" onclick="closeSheet()">×</button></h3>
+  <p class="tiny">${cur?('現在の選択：<b>'+(S.cpr.q.techLabel||cur)+'</b>'+(S.cpr.q.techniqueOK?'（適合）':'（不適合）')):'未選択'}</p>`;
+  TECHNIQUES.forEach(t=>{ const on=cur===t[0]; h+=`<button class="item ${on?'sel':''}" onclick="cprTech('${t[0]}')"><span class="tick">${on?'✓':'＋'}</span><span>${t[1]}</span></button>`; });
   openSheet(h); }
 function cprTech(t){ const c=S.cpr; const ok=techniqueOK(c.m.chest,t);
+  c.q.technique=t; c.q.techLabel=(TECHNIQUES.find(x=>x[0]===t)||['',''])[1];
   if(ok){c.score+=10;c.roscProb+=5;c.q.techniqueOK=true;cprLog("胸郭形態に合った圧迫位置を選択。");}
   else{c.score-=8;c.roscProb-=4;c.q.techniqueOK=false;cprLog("圧迫位置が胸郭形態に不適切。ETCO2/DBPが上がりにくい。");}
   cprEtco2(); closeSheet(); renderCPR(); }
@@ -2307,8 +2328,9 @@ function cprVentRate(r){ const c=S.cpr; c.q.ventRate=r;
     else if(r>20){c.score-=10;c.q.overVent=true;c.roscProb-=5;cprLog("過換気。静脈還流と冠灌流を低下させうる。");}
     else{c.score-=3;cprLog("換気回数が推奨から外れている。");} }
   cprEtco2(); closeSheet(); renderCPR(); }
-function cprVentModal(){ let h=`<h3>換気回数（挿管下）<button class="x" onclick="closeSheet()">×</button></h3>`;
-  [6,10,15,25].forEach(r=>h+=`<button class="item" onclick="cprVentRate(${r})"><span class="tick">＋</span><span>${r} 回/分</span></button>`);
+function cprVentModal(){ const cur=S.cpr.q.ventRate; let h=`<h3>換気回数（挿管下）<button class="x" onclick="closeSheet()">×</button></h3>
+  <p class="tiny">${cur?('現在の選択：<b>'+cur+' 回/分</b>'):'未選択'}（挿管下の推奨は10回/分）</p>`;
+  [6,10,15,25].forEach(r=>{ const on=cur===r; h+=`<button class="item ${on?'sel':''}" onclick="cprVentRate(${r})"><span class="tick">${on?'✓':'＋'}</span><span>${r} 回/分</span></button>`; });
   openSheet(h); }
 
 // --- ALS ---
@@ -2499,16 +2521,18 @@ function cprDebrief(rosc){ if(cprRaf){cancelAnimationFrame(cprRaf);cprRaf=null;}
        <button class="btn ghost" style="margin-top:8px" onclick="toStart()">トップへ</button>`
     : rosc?`<button class="btn primary" onclick="cprReturnToCare()">▶ 蘇生後（PCA）管理として診療を続ける</button>
       <button class="btn ghost" style="margin-top:8px" onclick="finalize()">症例の最終評価へ</button>`
-    :`<button class="btn primary" onclick="finalize()">症例の最終評価へ</button>
+    :`<button class="btn primary" onclick="cprToFinal()">症例の最終評価へ</button>
       <button class="btn ghost" style="margin-top:8px" onclick="enterCPR()">CPRをやり直す</button>`}
     <p class="tiny" style="margin-top:10px">※教育用シミュレーション。胸骨圧迫の手技・用量・除細動エネルギー・薬剤選択は最新のRECOVERガイドラインと施設プロトコルで確認してください。</p>
   </div>`;
 }
 function cprReturnToCare(){ // ROSC後、通常診療へ復帰（蘇生後管理）
   const ra=cprReArrest();
-  S.arrest=false; S.rosc=true; S.cpr.status="rosc";
+  if(cprRaf){cancelAnimationFrame(cprRaf);cprRaf=null;}
+  S.arrest=false; S.rosc=true;
   // 原因未対処なら不安定な蘇生後状態（再CPAリスク）として戻す
   S.h.HR=ra.unresolved?96:120; S.h.SBP=ra.unresolved?78:95; S.h.SpO2=94; S.h.RR=ra.unresolved?34:24;
+  S.cpr=null; // ★CPRオブジェクトを解除：残すと doAction の `if(S.cpr)return` と advanceTime の `!S.cpr` で通常UI/病態が更新されなくなる
   document.getElementById('cpr').classList.add('hide');
   document.getElementById('sim').classList.remove('hide');
   document.getElementById('alarm').textContent=ra.unresolved?'🟠 ROSC（不安定）':'🟢 ROSC';
@@ -2522,23 +2546,28 @@ function btnG(html){ return `<div class="card"><div style="display:grid;grid-tem
 function cb(onclick,label,on){ return `<button class="btn ${on?'':'ghost'}" style="padding:10px 6px;font-size:13px;${on?'border-color:#1d6b50':''}" onclick="${onclick}">${on?'✓ ':''}${label}</button>`; }
 function renderCPR(){
   const c=S.cpr; const pause=inPause();
-  const rh = c.rhythm==="unknown"?"— 判定前 —":rhythmName(c.rhythm);
+  const liveR = cprDisplayRhythm(c); // モニターに映る実電気活動
+  // 未判定では「電気的パターン＋脈確認の促し」を表示し、PEA/灌流リズムの早合点を避ける（区別は脈で）
+  const liveLabel = (r)=> r==="none"?"ECG未装着":r==="sinus"?"組織化リズム（脈あり）":r==="pea"?"組織化リズム（要・脈/レート確認）":r==="asystole"?"心静止(asystole)":r==="vf"?"心室細動(VF)":r==="pvt"?"無脈性VT(PVT)":"—";
+  const rh = c.rhythm==="unknown"? liveLabel(liveR)+"（未判定）" : rhythmName(c.rhythm);
+  const rhShock = isShock(c.rhythm==="unknown"?liveR:c.rhythm);
   const et = c.mon.etco2? (c.mon.etco2v||"–")+" mmHg"+((c.mon.etco2v>=18)?" ✅":"") : "未装着";
   const statusTxt = c.status==="cpa_suspected"?"CPA疑い：初期評価を":c.status==="bls_active"?`BLS実施中（サイクル${c.cycle+1}）`:c.status==="cycle_pause"?"⏸ PAUSE（10秒以内に判定・処置・交代）":c.status;
   document.getElementById('cpr').innerHTML=`<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
     <div class="monitor">
       <div class="topbar"><span>🔴 CPR/ALS・RECOVER2024　経過 ${fmt(c.totalSec)}</span><span>${c.m.species==="cat"?"🐱":"🐕"} ${c.m.weightKg}kg</span></div>
       <div style="display:flex;gap:8px;margin-top:6px">
-        <div class="vit" style="flex:1"><div class="lab">リズム</div><div style="font-weight:800;font-size:15px;color:${isShock(c.rhythm)?'#ff6d7a':'#7ef0c4'}">${rh}</div></div>
+        <div class="vit" style="flex:1"><div class="lab">リズム</div><div style="font-weight:800;font-size:14px;color:${rhShock?'#ff6d7a':'#7ef0c4'}">${rh}</div></div>
         <div class="vit" style="flex:1"><div class="lab">ETCO₂</div><div style="font-weight:800;font-size:15px;color:#5fd0ff">${et}</div></div>
         <div class="vit" style="flex:1"><div class="lab">経路 / ECG</div><div style="font-weight:800;font-size:13px">${c.access==="none"?"未確保":c.access.toUpperCase()} / ${c.mon.ecg?"装着":"なし"}</div></div>
       </div>
-      <canvas id="cprecg" width="600" height="104" style="height:84px;margin-top:6px;background:#03100a;border:1px solid #10341f;border-radius:8px"></canvas>
+      <canvas id="cprecg" width="600" height="150" style="height:120px;width:100%;margin-top:6px;background:#03100a;border:1px solid #10341f;border-radius:8px"></canvas>
     </div>
     <div class="body" style="flex:1;overflow:auto">
       <div class="card" style="text-align:center;border-color:${pause?'#6b561d':'#6b2330'}"><b style="color:${pause?'var(--amber)':'var(--red)'}">${statusTxt}</b>
         <div class="tiny" style="margin-top:2px">${c.flags.has('cause')?('推定原因：'+causeLabel(c.m.cause)+(c.m.iatrogenic?'（医原性）':'')+(REVERSIBLE_CAUSES.includes(c.m.cause)?'・可逆的→原因治療を':'')):'推定原因：未検索（「原因検索」で評価）'}</div>
-        <div class="tiny" style="margin-top:2px">中断 ${Math.round(c.q.handsOff)}秒　/　圧迫 ${c.q.compStarted?(c.q.rate+"/分・"+(c.q.depth==="adequate"?"適深":"浅い")+(c.q.recoil?"・リコイル可":"")):"未開始"}　/　換気 ${c.q.ventStarted?(c.q.intubated?(c.q.ventRate+"回/分(挿管)"):"BMV"):"なし"}</div></div>
+        <div class="tiny" style="margin-top:2px">中断 ${Math.round(c.q.handsOff)}秒　/　圧迫 ${c.q.compStarted?(c.q.rate+"/分・"+(c.q.depth==="adequate"?"適深":"浅い")+(c.q.recoil?"・リコイル可":"")):"未開始"}　/　換気 ${c.q.ventStarted?(c.q.intubated?(c.q.ventRate+"回/分(挿管)"):"BMV"):"なし"}</div>
+        <div class="tiny" style="margin-top:2px">圧迫位置：${c.q.technique?('<b>'+(c.q.techLabel||'')+'</b>'+(c.q.techniqueOK?'<span style="color:var(--green)"> ✓適合</span>':'<span style="color:var(--red)"> ×不適合</span>')):'未選択'}　/　ECG：${c.mon.ecg?'装着':'<span style="color:var(--amber)">未装着</span>'}</div></div>
 
       <div class="sub" style="margin:4px 2px">① 初期評価</div>
       ${btnG(cb("cprCall('help','応援要請。記録係・タイマーを割り当てる。')","応援要請",c.flags.has('help'))+cb("cprCall('resp','反応・脈・呼吸を10秒以内で確認。CPA確定。')","反応/呼吸確認",c.flags.has('resp'))+cb("cprStartBLS()","BLS開始",c.status!=='cpa_suspected')+cb("cprCall('cause','可逆的原因(Hs&Ts)を検索。')","原因検索",c.flags.has('cause')))}
@@ -2564,43 +2593,67 @@ function renderCPR(){
     </div>
   </div>`;
 }
+// CPR中の「実際に映っているリズム」。ECG装着時はモニターに出る（判定の有無に関わらず）。圧迫中はアーチファクトで覆われる。
+function cprDisplayRhythm(c){
+  if(!c.mon.ecg)return "none";
+  if(c.status==="rosc"||c.rhythm==="rosc"||c.rhythm==="organized_with_pulse")return "sinus"; // 自己心拍（脈あり）
+  return c.trueRhythm||"unknown";
+}
 function cprLoop(){ const cv=document.getElementById('cprecg'); if(!cv||!S.cpr){cprRaf=requestAnimationFrame(cprLoop);return;}
-  const ctx=cv.getContext('2d'),W=cv.width,H=cv.height,LH=H/2;
+  const ctx=cv.getContext('2d'),W=cv.width,H=cv.height,LH=H/3; // 3レーン：ECG / 動脈圧 / ETCO₂
   ctx.fillStyle="#03100a";ctx.fillRect(0,0,W,H);
   ctx.strokeStyle="#0c2a1a";ctx.lineWidth=1;
   for(let x=0;x<W;x+=18){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-  ctx.beginPath();ctx.moveTo(0,LH);ctx.lineTo(W,LH);ctx.stroke(); // 2レーン分割線
+  ctx.beginPath();ctx.moveTo(0,LH);ctx.lineTo(W,LH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,LH*2);ctx.lineTo(W,LH*2);ctx.stroke();
   const c=S.cpr;
-  if(!c._b){c._b=new Array(W).fill(LH*0.5);c._cap=new Array(W).fill(LH*1.92);c._x=0;c._ph=0;c._cp=0;}
-  const compressing = c.q.compStarted && c.status==="bls_active"; // 圧迫実施中か
-  const rhythmShown = c.rhythm!=="unknown";
+  if(!c._b){c._b=new Array(W).fill(null);c._art=new Array(W).fill(null);c._cap=new Array(W).fill(null);c._x=0;c._ph=0;c._aph=0;c._cp=0;}
+  const compressing = c.q.compStarted && c.status==="bls_active"; // 圧迫実施中（ECGはアーチファクトで覆われる）
+  const er = compressing ? "compress" : cprDisplayRhythm(c); // 表示リズム
+  const perfusing = (er==="sinus"); // 自己拍出（脈）のあるリズム
+  const eB=LH*0.5, aB=LH*1.5, cB=LH*2.92; // 各レーンのベースライン
   const ec = c.mon.etco2 ? (c.mon.etco2v||8) : 0;
   const bw = Math.max(40,Math.round(W/6)); // 換気1呼吸の幅
   for(let s=0;s<4;s++){ c._x=(c._x+1)%W;
-    // ECGレーン（上半分・中心 LH*0.5）
-    let y=LH*0.5;
-    if(c.status==="rosc"||c.rhythm==="organized_with_pulse"||c.rhythm==="rosc"){ c._ph+=1/40;if(c._ph>=1)c._ph-=1; y=LH*0.5-ecgSample(c._ph)*LH*0.42; }
-    else if(compressing){ c._cp+=0.17; y=LH*0.5 - Math.max(0,Math.sin(c._cp))*LH*0.46 - (Math.random()-0.5)*2; } // 圧迫アーチファクト（常に動く）
-    else if(rhythmShown&&c.rhythm==="vf"){ y=LH*0.5+(Math.sin(c._x*0.7)+Math.sin(c._x*1.9))*LH*0.2+(Math.random()-0.5)*4; }
-    else if(rhythmShown&&c.rhythm==="pea"){ c._ph+=1/55;if(c._ph>=1)c._ph-=1; y=LH*0.5-ecgSample(c._ph)*LH*0.3; }
-    else { y=LH*0.5+(Math.random()-0.5)*2; } // asystole / 判定前は平坦
+    // --- ① ECGレーン ---
+    let y=eB;
+    if(er==="none"){ y=eB+(Math.random()-0.5)*0.6; } // 未装着＝信号なし
+    else if(er==="compress"){ c._cp+=0.17; y=eB - Math.max(0,Math.sin(c._cp))*LH*0.42 - (Math.random()-0.5)*2; } // 圧迫アーチファクト
+    else if(er==="sinus"){ c._ph+=1/42;if(c._ph>=1)c._ph-=1; y=eB-ecgSample(c._ph)*LH*0.40; } // 洞調律/組織化（P-QRS-T）
+    else if(er==="pea"){ c._ph+=1/78;if(c._ph>=1)c._ph-=1; y=eB-peaSample(c._ph)*LH*0.40; } // PEA＝幅広・緩徐(<200/分)な組織化複合波（脈はART参照）
+    else if(er==="pvt"){ c._ph+=1/30;if(c._ph>=1)c._ph-=1; y=eB-Math.sin(c._ph*2*Math.PI)*LH*0.36; } // 幅広規則的
+    else if(er==="vf"){ y=eB+(Math.sin(c._x*0.7)+Math.sin(c._x*1.9))*LH*0.18+(Math.random()-0.5)*4; } // 細動
+    else { y=eB+(Math.random()-0.5)*1.6; } // asystole/unknown＝平坦
     c._b[c._x]=y; for(let k=1;k<5;k++)c._b[(c._x+k)%W]=null;
-    // ETCO₂カプノグラフ（下半分・ベースライン LH*1.92）
-    let cy=LH*1.92;
-    if(c.mon.etco2 && (compressing||c.q.ventStarted)){
-      const amp=(Math.min(45,Math.max(4,ec))/45)*LH*0.78;
+    // --- ② 動脈圧（脈）レーン：PEA/asystole/VFは平坦＝脈なし、ROSCで拍動、圧迫中は圧迫由来の脈波 ---
+    let ay=aB;
+    if(perfusing){ c._aph+=1/42;if(c._aph>=1)c._aph-=1; ay=aB-artSample(c._aph)*LH*0.86; }
+    else if(compressing){ ay=aB - Math.max(0,Math.sin(c._cp))*LH*0.5; } // 圧迫が生む拍動流
+    else { ay=aB+(Math.random()-0.5)*0.8; } // 脈なし＝平坦
+    c._art[c._x]=ay; for(let k=1;k<5;k++)c._art[(c._x+k)%W]=null;
+    // --- ③ ETCO₂カプノグラフ ---
+    let cy=cB;
+    if(c.mon.etco2 && (compressing||c.q.ventStarted||perfusing)){
+      const amp=(Math.min(45,Math.max(4,ec))/45)*LH*0.82;
       const ph=(c._x%bw)/bw;
       const plat = ph<0.18? ph/0.18 : ph>0.82? Math.max(0,(1-(ph-0.82)/0.18)) : 1;
-      cy = LH*1.92 - amp*plat;
+      cy = cB - amp*plat;
     }
     c._cap[c._x]=cy; for(let k=1;k<5;k++)c._cap[(c._x+k)%W]=null;
   }
-  ctx.strokeStyle=compressing?"#37e08a":"#2aa86a";ctx.lineWidth=2;ctx.beginPath();let st=false;
-  for(let x=0;x<W;x++){const y=c._b[(c._x+1+x)%W];if(y==null){st=false;continue;}if(!st){ctx.moveTo(x,y);st=true;}else ctx.lineTo(x,y);} ctx.stroke();
-  ctx.strokeStyle="#5fd0ff";ctx.lineWidth=2;ctx.beginPath();st=false;
-  for(let x=0;x<W;x++){const y=c._cap[(c._x+1+x)%W];if(y==null){st=false;continue;}if(!st){ctx.moveTo(x,y);st=true;}else ctx.lineTo(x,y);} ctx.stroke();
-  ctx.fillStyle=compressing?"#37e08a":"#2a6b4a";ctx.font="10px ui-monospace";ctx.fillText("ECG"+(compressing?"  ● 圧迫中":"  （圧迫停止中）"),5,12);
-  ctx.fillStyle="#3f9ec4";ctx.fillText("ETCO₂"+(c.mon.etco2?("  "+Math.round(ec)+" mmHg"):"  未装着"),5,LH+13);
+  const drawTrace=(buf,col)=>{ ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();let st=false;
+    for(let x=0;x<W;x++){const y=buf[(c._x+1+x)%W];if(y==null){st=false;continue;}if(!st){ctx.moveTo(x,y);st=true;}else ctx.lineTo(x,y);}ctx.stroke(); };
+  drawTrace(c._b, er==="compress"?"#37e08a":(er==="none"?"#1f5238":(er==="vf"||er==="pvt")?"#ff6d7a":"#2aa86a"));
+  drawTrace(c._art, perfusing?"#ff6d7a":(compressing?"#e0a050":"#5a2a30"));
+  drawTrace(c._cap, "#5fd0ff");
+  // レーンラベル
+  ctx.font="10px ui-monospace";
+  const ecgLbl = !c.mon.ecg?"ECG  未装着" : ("ECG  "+(er==="compress"?"● 圧迫中（アーチファクト）":er==="sinus"?"洞調律/組織化":er==="pea"?"幅広・緩徐の組織化（<200・PEA?）":er==="vf"?"VF（不規則）":er==="pvt"?"幅広頻拍（>200・PVT?）":er==="asystole"?"心静止(asystole)":"—"));
+  ctx.fillStyle=!c.mon.ecg?"#b6892f":(er==="compress"?"#37e08a":(er==="vf"||er==="pvt")?"#ff8a94":"#2a6b4a");
+  ctx.fillText(ecgLbl,5,LH*0+12);
+  ctx.fillStyle=perfusing?"#ff8a94":(compressing?"#e0a050":"#a85a62");
+  ctx.fillText("動脈圧  "+(perfusing?"脈あり（自己拍出）":compressing?"圧迫由来の脈波":"脈なし（拍出なし）"),5,LH*1+12);
+  ctx.fillStyle="#3f9ec4";ctx.fillText("ETCO₂"+(c.mon.etco2?("  "+Math.round(ec)+" mmHg"):"  未装着"),5,LH*2+12);
   cprRaf=requestAnimationFrame(cprLoop);
 }
 

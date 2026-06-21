@@ -160,6 +160,7 @@ const CATALOG = [
     {g:"昇圧・循環作動薬", items:[{id:"d_adrenalin",label:"アドレナリン"},{id:"d_norad",label:"ノルアドレナリン"},{id:"d_dobu",label:"ドブタミン"},{id:"d_atropine",label:"アトロピン"}]},
     {g:"抗不整脈薬", items:[{id:"d_lidocaine",label:"リドカイン"},{id:"d_amiodaron",label:"アミオダロン"}]},
     {g:"利尿薬・浸透圧薬", items:[{id:"d_furosem",label:"フロセミド"},{id:"d_mannitol",label:"マンニトール"}]},
+    {g:"強心・循環", items:[{id:"d_pimoben",label:"ピモベンダン"}]},
     {g:"抗菌薬", items:[{id:"d_ampi",label:"アンピシリン"},{id:"d_cefazolin",label:"セファゾリン"},{id:"d_enroflox",label:"エンロフロキサシン"},{id:"d_metronid",label:"メトロニダゾール"}]},
     {g:"抗炎症・免疫抑制・ステロイド", items:[{id:"d_predniso",label:"プレドニゾロン"},{id:"d_dexameth",label:"デキサメタゾン"},{id:"d_hydrocort",label:"ヒドロコルチゾン"},{id:"d_docp",label:"DOCP（デソキシコルチコステロン）"}]},
     {g:"消化器薬", items:[{id:"d_maropit",label:"マロピタント"},{id:"d_metoclo",label:"メトクロプラミド"},{id:"d_famotid",label:"ファモチジン"}]},
@@ -583,7 +584,8 @@ const CASES = {
     signalment:"猫 9歳 避妊雌 雑種 4.0kg",
     open:"昨夜から呼吸が速く、今朝は口を開けて苦しそう。動きたがらず、伏せたまま。",
     hidden:{HR:200,SBP:120,SpO2:86,RR:70,temp:38.0},
-    cardiac:{sp:"cat",laAo:1.9,fs:55,peri:false,phSites:1,bnp:480,lvh:true,echoAbn:true}, // 猫CHF（心筋症背景）：左房拡大＋壁肥厚＋proBNP高値
+    cardiac:{sp:"cat",laAo:1.9,fs:55,peri:false,phSites:1,bnp:480,lvh:true,echoAbn:true, // 猫CHF（心筋症背景）：左房拡大＋壁肥厚＋proBNP高値
+      echoDx:{pheno:"心原性うっ血／左房拡大（CHF）",reasons:["e_la_enl","e_lvh","e_fs_ok","e_bnp_high"]}},
 
     labs0:{K:4.0,Na:150,Cl:115,iCa:1.3,BUN:28,Cre:1.6,Glu:130,pH:7.34,HCO3:20,PCV:38,TP:7.0,lactate:2.0},
     physiology(S){
@@ -620,6 +622,96 @@ const CASES = {
     truthImg:{region:"thorax", text:"胸腔内に液体貯留を示唆する所見。",
       ct:{text:"CT：両側胸水を明瞭に確認。X線・FAST所見と整合する。",s:-8,time:600,abn:true,tag:"harmful",verdict:"所見は得られるが、呼吸不安定な猫で鎮静/麻酔を要するCTを優先するのは不適切。まず酸素化と胸腔穿刺を。"}},
     finalNote:"開口・起座呼吸の猫はまず酸素と最小ハンドリングが命綱。保定やX線はストレスで急変しうる。TFAST/胸腔穿刺で胸水を確認・排液（診断的かつ治療的）。心原性が疑われればフロセミド。呼吸不安定な猫への積極的輸液は禁物。",
+  },
+
+  // ===== V) 心原性肺水腫（MMVD stage C）— 呼吸困難犬ファミリー =====
+  dog_chf:{
+    id:"dog_chf", icon:"🐕", title:"夜間の咳のあと急に苦しむ小型犬（心原性）", level:"★★★", patient:"dog",
+    signalment:"犬 11歳 去勢雄 キャバリア・KCS 6.5kg",
+    open:"数日前から夜間〜早朝の咳。今朝から呼吸が速く苦しそうで動きたがらない。",
+    hidden:{HR:160,SBP:130,SpO2:88,RR:60,temp:38.6},
+    cardiac:{sp:"dog",laAo:2.1,lviddn:1.9,fs:48,peri:false,phSites:1,bnp:2400,murmur:5,epss:5.5,echoMode:"complete",echoAbn:true, // MMVD-C：高度左房拡大＋LVIDDN高値＋proBNP高値
+      echoDx:{pheno:"心原性うっ血／左房拡大（CHF）",reasons:["e_la_enl","e_dilated","e_bnp_high","e_blines","e_perihilar"]}},
+    labs0:{K:4.2,Na:146,Cl:110,iCa:1.25,BUN:30,Cre:1.3,Glu:108,pH:7.34,HCO3:20,PCV:46,TP:6.8,lactate:2.2},
+    physiology(S){ const o2=S.flags.has("o2"), diur=S.flags.has("d_furosem");
+      S.h.SpO2+=(((diur?96:(o2?93:88)))-S.h.SpO2)*0.25;
+      S.h.RR+=(((diur?32:(o2?52:60)))-S.h.RR)*0.2;
+      S.h.HR+=(((diur?128:160))-S.h.HR)*0.1;
+      if(S.flags.has("bigbolus")||S.flags.has("bolus")||S.flags.has("fluids")){ S.h.SpO2-=0.5; S.h.RR+=0.6; } }, // 輸液で肺水腫悪化
+    dz:["cardiogenic_edema","chf","mmvd_c","respiratory_distress"],
+    correctDx:["dx_chf"], primaryDx:"dx_chf", correctDispo:["do_admit","do_icu"],
+    res:{
+      hx_cc:{text:"数日前から夜間〜早朝の咳。今朝から呼吸が速く苦しそう。",s:2,time:30},
+      hx_resp:{text:"夜間・明け方の咳が増え、運動を嫌がるようになった。安静時の呼吸数も増えていた。",s:5,time:30,flag:["nocturnal_cough"],tag:"good"},
+      hx_pmh:{text:"以前から心雑音を指摘されていた（投薬はしていない）。",s:4,time:30,flag:["murmur_history"],tag:"good"},
+      monitor:{text:"モニターを装着。洞性頻脈。",s:2,time:30,reveal:["HR","SBP","SpO2","RR"]},
+      o2:{text:"酸素を投与。努力性呼吸がやや軽減。",s:8,time:30,tag:"critical",critLabel:"酸素化・最小ハンドリング",miss:-16},
+      ex_thorax:{text:"左心尖部に強い全収縮期雑音（5/6）。両肺野に吸気性のラ音（crackle）を聴取。",s:7,time:60,flag:["murmur5","crackles"],tag:"critical",critLabel:"心雑音・肺音の聴診",miss:-12},
+      ex_effort:{text:"起座位で吸気性の努力呼吸。",s:3,time:60,tag:"good"},
+      ex_general:{text:"沈鬱、動きたがらない。",s:1,time:60},
+      ex_mm:{text:"可視粘膜はピンク〜軽度チアノーゼ、CRT 2秒。",s:2,time:60},
+      ex_temp:{text:"直腸温 38.6℃（発熱なし）。",s:2,time:60,reveal:["temp"],flag:["afebrile"],tag:"good"},
+      ivc:{text:"静脈路を確保。",s:3,time:60,flag:["iv"],tag:"good"},
+      l_fast:{text:"肺エコー/TFAST：両側にB-line瀰漫（>1部位で強陽性）。左房拡大を認める。",s:8,time:90,reveal:["fast"],flag:["blines","la_enl_us"],tag:"critical",critLabel:"肺エコー/TFAST（B-line・左房）",miss:-12},
+      l_thorax:{text:"胸部X線（酸素化後）：左房拡大と肺静脈の怒張、肺門周囲（perihilar）優位の肺胞パターン。VHSは拡大。",s:6,time:120,reveal:["xray"],flag:["perihilar_edema","vhs_high"],abn:true,tag:"good"},
+      l_echo:{text:"",s:8,time:150,flag:["chf_evidence","echo_done"],tag:"critical",critLabel:"心エコーで左房/左室を評価",miss:-10},
+      l_cbc:{text:"著明な炎症像（好中球増多/左方移動）はない。",s:3,time:120,flag:["no_inflam"],tag:"good"},
+      d_furosem:{text:"フロセミドを投与。利尿で前負荷を下げ肺水腫を軽減。呼吸が楽になる。",s:10,time:60,flag:["diuresed"],tag:"critical",critLabel:"心原性肺水腫に利尿（フロセミド）",miss:-14},
+      d_pimoben:{text:"ピモベンダンを投与（強心・血管拡張）。MMVDのCHF/前臨床B2の柱。",s:6,time:60,flag:["pimo"],tag:"good"},
+      bolus:{text:"晶質液ボーラスを実施した。",s:-10,time:30,tag:"harmful",verdict:"心原性肺水腫（左房拡大・B-line・proBNP高値）への輸液ボーラスは肺水腫を悪化させる。利尿・酸素を優先。"},
+      bigbolus:{text:"大量急速輸液を実施した。",s:-12,time:30,tag:"harmful",verdict:"心原性肺水腫への大量輸液は致命的に悪化させる。"},
+      fluids:{text:"輸液を開始した。",s:-5,time:30,tag:"harmful",verdict:"心原性肺水腫では積極的輸液は前負荷を増し悪化させる。"},
+      d_ampi:{text:"抗菌薬を投与した。",s:-2,time:60,tag:"good",verdict:"発熱や炎症像がなく感染の根拠に乏しい。心原性肺水腫に抗菌薬は不要。"},
+    },
+    truthImg:{region:"thorax", text:"左房拡大と肺門周囲優位の肺胞パターン。",
+      ct:{text:"CT：左房拡大と肺胞性浸潤。ただし不安定な呼吸困難ではまず酸素・利尿。",s:-4,time:600,abn:true,tag:"harmful",verdict:"所見は得られるが、呼吸不安定例で鎮静/麻酔を要するCTは不適切。酸素・利尿を優先。"}},
+    finalNote:"高齢・小型犬（キャバリア等）で慢性の心雑音＋夜間の咳＋安静時呼吸数増加から急性の呼吸困難に至った場合、まず心原性肺水腫（MMVD stage C）を疑う。酸素＋最小ハンドリングで安定化し、聴診（左心尖部の強い雑音＋ラ音）、肺エコーのB-line瀰漫、胸部X線の肺門周囲肺胞パターン＋左房拡大、心エコーのLA/Ao高値・LVIDDN高値、NT-proBNP>1800を統合して非心原性と分ける。治療はフロセミドによる利尿が要、ピモベンダンを併用。輸液ボーラスは肺水腫を悪化させ禁物。出典：ACVIM MMVD 2019／EPIC 2016／Small Animal Internal Medicine 6th。",
+  },
+
+  // ===== W) 細菌性肺炎（非心原性）— 呼吸困難犬ファミリー =====
+  dog_pneumonia:{
+    id:"dog_pneumonia", icon:"🐕‍🦺", title:"発熱と咳のあと呼吸が速い犬（非心原性）", level:"★★★", patient:"dog",
+    signalment:"犬 5歳 去勢雄 ラブラドール 28kg",
+    open:"数日前から咳と発熱、元気・食欲が低下。今日は呼吸が速い。",
+    hidden:{HR:130,SBP:120,SpO2:89,RR:50,temp:39.8},
+    cardiac:{sp:"dog",laAo:1.30,lviddn:1.5,fs:36,peri:false,phSites:0,bnp:350,murmur:0,echoMode:"focused",echoAbn:false, // 心は正常：LA/Ao正常・proBNP低値
+      echoDx:{pheno:"非心原性（心は正常〜軽度）",reasons:["e_la_normal","e_fs_ok","e_bnp_low","e_noncardiac"]}},
+    labs0:{K:4.3,Na:147,Cl:111,iCa:1.25,BUN:24,Cre:1.0,Glu:104,pH:7.36,HCO3:20,PCV:44,TP:7.2,lactate:2.0},
+    physiology(S){ const o2=S.flags.has("o2"), abx=S.flags.has("d_ampi")||S.flags.has("d_cefazolin")||S.flags.has("d_enroflox");
+      S.h.SpO2+=(((o2?94:89)+(abx?2:0))-S.h.SpO2)*0.2;
+      S.h.RR+=(((o2?42:50)-(abx?4:0))-S.h.RR)*0.2;
+      S.h.HR+=(((o2?116:130))-S.h.HR)*0.1;
+      S.h.temp+=(((abx?38.9:39.8))-S.h.temp)*0.05;
+      if(S.flags.has("d_furosem")){ S.h.SpO2-=0.4; } }, // 脱水で分泌物濃縮・換気血流不均衡悪化
+    dz:["pneumonia","respiratory_distress","sepsis_risk"],
+    correctDx:["dx_pneumonia"], primaryDx:"dx_pneumonia", correctDispo:["do_admit","do_icu"],
+    res:{
+      hx_cc:{text:"数日前から咳と発熱、元気・食欲低下。今日は呼吸が速い。",s:2,time:30},
+      hx_resp:{text:"湿った咳が続き、ここ数日は元気と食欲が落ちて発熱もあった。",s:5,time:30,flag:["productive_cough","fever_hx"],tag:"good"},
+      hx_pmh:{text:"心臓病を指摘されたことはない。最近、吐き戻し/誤嚥のエピソードがあった。",s:4,time:30,flag:["aspiration_hx"],tag:"good"},
+      monitor:{text:"モニターを装着。洞性頻脈。",s:2,time:30,reveal:["HR","SBP","SpO2","RR"]},
+      o2:{text:"酸素を投与。SpO₂がやや改善。",s:8,time:30,tag:"critical",critLabel:"酸素化・最小ハンドリング",miss:-16},
+      ex_thorax:{text:"右前腹側で湿性ラ音と気管支音を聴取。心雑音はない。",s:7,time:60,flag:["crackles_cv","no_murmur"],tag:"critical",critLabel:"心雑音・肺音の聴診",miss:-12},
+      ex_effort:{text:"頻呼吸。努力性は中等度。",s:2,time:60,tag:"good"},
+      ex_general:{text:"沈鬱・元気消失。",s:1,time:60},
+      ex_mm:{text:"可視粘膜はピンク、CRT 2秒。",s:2,time:60},
+      ex_temp:{text:"直腸温 39.8℃（発熱）。",s:6,time:60,reveal:["temp"],flag:["fever"],tag:"critical",critLabel:"体温（発熱）の評価",miss:-8},
+      ivc:{text:"静脈路を確保。",s:4,time:60,flag:["iv"],tag:"good"},
+      fluids:{text:"晶質液で輸液を開始した。",s:4,time:30,flag:["resus"],tag:"good"},
+      l_cbc:{text:"好中球性の白血球増多（左方移動を伴う）。炎症を示唆。",s:6,time:120,flag:["inflam"],tag:"critical",critLabel:"CBCで炎症像を評価",miss:-8},
+      l_fast:{text:"肺エコー/TFAST：右前腹側に限局するB-lineとconsolidation。左房拡大はない。",s:7,time:90,reveal:["fast"],flag:["focal_blines","la_normal_us"],tag:"good"},
+      l_thorax:{text:"胸部X線：右前葉中心の前腹側（cranioventral）肺胞パターン。心陰影は正常で左房拡大はない。",s:7,time:120,reveal:["xray"],flag:["cranioventral_pattern","heart_normal"],abn:true,tag:"critical",critLabel:"胸部X線で分布パターンを評価",miss:-10},
+      l_echo:{text:"",s:5,time:150,flag:["echo_done"],tag:"good"},
+      d_ampi:{text:"抗菌薬を投与（理想は気道採取/培養後）。細菌性肺炎の治療の柱。",s:9,time:60,flag:["abx_appropriate"],tag:"critical",critGroup:"pneu_abx",critLabel:"細菌性肺炎に抗菌薬",miss:-12},
+      d_cefazolin:{text:"抗菌薬を投与（理想は気道採取/培養後）。",s:7,time:60,flag:["abx_appropriate"],tag:"critical",critGroup:"pneu_abx",critLabel:"細菌性肺炎に抗菌薬",miss:-12},
+      d_enroflox:{text:"抗菌薬を投与（グラム陰性カバー）。",s:6,time:60,flag:["abx_appropriate"],tag:"critical",critGroup:"pneu_abx",critLabel:"細菌性肺炎に抗菌薬",miss:-12},
+      d_furosem:{text:"フロセミドを投与した。",s:-8,time:60,tag:"harmful",verdict:"左房拡大なし・proBNP低値・発熱＋前腹側パターン＝非心原性（肺炎）。フロセミドは脱水・分泌物濃縮で換気血流不均衡を悪化させ有害。心原性を確認してから使う。"},
+      d_terbutal:{text:"気管支拡張薬を投与した。",s:-2,time:30,tag:"good",verdict:"気管支攣縮が主体ではない肺炎では効果は限定的。"},
+      bigbolus:{text:"大量急速輸液を実施した。",s:-4,time:30,tag:"harmful",verdict:"肺炎でも過剰輸液は肺水腫様の悪化を招きうる。循環をみながら適正量で。"},
+    },
+    truthImg:{region:"thorax", text:"前腹側（cranioventral）優位の肺胞パターン。心陰影は正常。",
+      ct:{text:"CT：右前葉の consolidation。心拡大なし。安定後の評価として。",s:-2,time:600,abn:true,tag:"harmful",verdict:"所見は得られるが、まず酸素・抗菌薬・輸液の安定化を優先。"}},
+    finalNote:"若〜中年の犬で発熱＋湿性咳＋元気消失の経過から急性の頻呼吸に至り、聴診で前腹側のラ音（心雑音なし）、CBCで好中球性炎症、胸部X線で前腹側（cranioventral）優位の肺胞パターン、心エコーでLA/Ao正常・NT-proBNP低値なら非心原性＝細菌性肺炎。心原性肺水腫（左房拡大・perihilar・proBNP高値）との決定的な分かれ目は『左房サイズ＋proBNP＋肺パターンの分布』。治療は酸素・適切な抗菌薬（理想は気道採取/培養後）・輸液で、フロセミドは脱水を招き有害。誤嚥の有無も確認。出典：Small Animal Internal Medicine 6th／Canine and Feline Respiratory Medicine 3rd。",
   },
 
   // ===== D) 未診断の副腎皮質機能低下症（内科・初診として提示） =====
@@ -1083,7 +1175,8 @@ const CASES = {
     id:"feline_ate", icon:"🐈", title:"突然後肢が動かない猫（ATE）", level:"★★★", patient:"cat",
     signalment:"猫 8歳 避妊雌 雑種 4.2kg", open:"突然、後ろ足を引きずって大きな声で鳴いた。",
     hidden:{HR:210,SBP:120,SpO2:93,RR:64,temp:37.0,lactate:4.5},
-    cardiac:{sp:"cat",laAo:2.0,fs:45,peri:false,phSites:1,bnp:600,sec:true,lvh:true,echoAbn:true}, // ATE背景の心筋症：左房高度拡大＋SEC（もやもやエコー）＋壁肥厚
+    cardiac:{sp:"cat",laAo:2.0,fs:45,peri:false,phSites:1,bnp:600,sec:true,lvh:true,echoAbn:true, // ATE背景の心筋症：左房高度拡大＋SEC（もやもやエコー）＋壁肥厚
+      echoDx:{pheno:"心筋症＋血栓リスク（SEC）",reasons:["e_la_enl","e_sec","e_lvh"]}},
 
     labs0:{K:4.6,Na:150,Cl:118,iCa:1.2,BUN:30,Cre:1.6,Glu:170,pH:7.28,HCO3:17,PCV:40,TP:7.4,lactate:4.5},
     physiology(S){ S.h.SpO2+=(((S.flags.has("o2")?96:93))-S.h.SpO2)*0.2;
@@ -1587,6 +1680,9 @@ const FAMILIES=[
   {id:"feline_dyspnea", icon:"🐱", title:"呼吸が苦しそうな猫", level:"★★★",
    opening:"猫が口を開け、苦しそうに速い呼吸をしている。ぐったりして動きたがらない。",
    variants:["cat_resp","cat_asthma","cat_pneumothorax","cat_anemia"]},
+  {id:"canine_dyspnea", icon:"🐕", title:"呼吸が苦しそうな犬", level:"★★★",
+   opening:"犬が咳き込み、呼吸が速く苦しそう。元気がなく動きたがらない。",
+   variants:["dog_chf","dog_pneumonia"]},
   {id:"feline_lut", icon:"🐈", title:"何度もトイレに行く猫", level:"★★★",
    opening:"猫が何度もトイレに行き、痛そうにいきんでいる。飼い主は『便秘か膀胱炎かも』と思って来院。",
    variants:["cat_uo","cat_fic","cat_urolith","cat_uti"]},
@@ -1597,6 +1693,7 @@ const FAMILY_DXFLOW={
   vd_collapse:"主訴『嘔吐下痢のあとぐったり』からの進め方：①バイタルと脱水・腹部触診で外科腹症やショックの有無を評価する。②相対的徐脈や低Na・高K傾向、低血糖があれば副腎皮質機能低下症を疑い、電解質・血糖を確認（確定はACTH刺激試験）。③腹部に索状/塊状の構造物・排便停止＋誤食歴なら消化管異物を疑い、腹部X線/エコー。④前腹部痛（祈りのポーズ）＋脂肪食の不摂生＋炎症像なら膵炎を疑い、cPL・腹部エコー。⑤これらが除外され全身状態が保たれていれば、非特異的な急性胃腸炎として対症療法で経過をみる。",
   feline_lut:"主訴『何度もトイレに行く猫』からの進め方：最初に分けるべきは〈閉塞か非閉塞か〉。①膀胱を触知し、排尿の有無・量を確認、Kを測る。膀胱が大きく硬く緊満し排尿がなく高K（＋徐脈/ECG変化）なら尿道閉塞＝救急。減圧・導尿と高K血症治療を最優先。②排尿があり膀胱は緊満でなくK正常なら非閉塞。ここから尿検査・沈渣・培養で分ける。③膿尿・細菌尿・培養陽性（高齢/併存疾患）なら細菌性膀胱炎→感受性に基づく抗菌薬。④結晶・画像で結石（再発歴・血尿）なら尿石症→結石種に応じた溶解/摘出と再発予防。⑤若〜中年で無菌（沈渣で細菌なし・培養陰性）・ストレス関連で波があるならFIC→環境改善・鎮痛・自然軽快、抗菌薬や導尿は不要。",
   feline_dyspnea:"主訴『呼吸が苦しそうな猫』からの進め方：まず酸素＋最小ハンドリングで安定化し、保定ストレスで急変させない。次に呼吸様式・聴診・粘膜色・TFASTで原因の場所を分ける。①呼気性の努力＋両側wheeze＋発作性の既往なら下気道（喘息）。気管支拡張薬＋ステロイド。②速く浅い呼吸＋背側で肺音減弱＋TFASTでglide sign消失（外傷歴）なら気胸。胸腔穿刺で脱気。③吸気性/拘束性＋腹側で肺音減弱＋TFASTで胸水＋心雑音/ギャロップなら胸水/心不全。胸腔穿刺＋心評価。④呼吸は速いが努力性に乏しく、肺音は清明で著明な粘膜蒼白＋PCV著減なら重度貧血（呼吸器疾患ではない）。輸血と原因検索。※心原性でないのにフロセミド、適応のない胸腔穿刺は避ける。",
+  canine_dyspnea:"主訴『呼吸が苦しそうな犬』からの進め方：まず酸素＋最小ハンドリングで安定化。次に〈心原性か非心原性か〉を分ける。①聴診で心雑音（左心尖部の収縮期雑音）とラ音の有無・部位を確認。②体温：発熱があれば感染（肺炎）を疑い、なければ心原性に傾く。③肺エコー：B-lineが瀰漫し左房拡大を伴えば心原性、限局＋consolidationなら肺炎。④胸部X線の分布：肺門周囲（perihilar）＋左房拡大＝心原性、前腹側（cranioventral）＝誤嚥/肺炎。⑤心エコーのLA/Ao（>1.6で拡大）・LVIDDN（>1.7）とNT-proBNP（犬>1800でCHF濃厚／<900で低リスク）で確定。心原性ならフロセミド＋ピモベンダン、非心原性（肺炎）なら抗菌薬＋輸液——フロセミドは非心原性では脱水を招き有害。決め手は『左房サイズ＋proBNP＋肺パターンの分布』。",
   acute_collapse:"主訴『急にぐったり倒れた犬』からの進め方：まずABC（気道・呼吸・循環）と粘膜色・脈・腹部を評価しショックを認識する。①曝露歴（虫刺され/ワクチン/薬/食物）の直後で、顔面腫脹/蕁麻疹＋蒼白・弱脈・低血圧＋急性（出血性）下痢ならアナフィラキシー。第一選択はアドレナリン＋輸液。②高齢大型犬で著明な粘膜蒼白＋腹部の波動/膨満＋PCV/TP低下なら腹腔内出血。AFASTで遊離液体、腹腔穿刺で非凝固血液を確認し、許容的低血圧の輸液・輸血・外科止血へ（大量輸液は再出血を招く）。③大型犬で腹部が鼓音性に膨満し非生産性の嘔吐ならGDV。右側臥位X線で確認し、減圧＋ショック輸液＋整復・胃固定。④嘔吐下痢の経過＋低血圧なのに頻脈が乏しい（相対的徐脈）＋低Na/高K・低血糖なら副腎クリーゼ。電解質・血糖を確認しグルココルチコイド・輸液で安定化（確定はACTH刺激）。",
   feline_hindlimb:"主訴『急に後ろ足が動かない猫』からの進め方：まず急性後肢麻痺を〈血管性／神経性／整形外科性〉に分ける。①後肢の大腿動脈拍動・四肢温・肉球（爪床）色を確認。拍動が触れず冷たく蒼白なら血管性＝大動脈血栓塞栓症（ATE、心音でギャロップ/雑音、心エコー）。激痛なので強力な鎮痛と抗血栓治療へ。②拍動が触れ四肢が温かければ血管性は遠のく。外傷歴＋骨盤の不安定/捻髪音なら整形外科性＝骨盤骨折（X線、ショック安定化、尿路損傷の評価）。③外傷がはっきりせず、尾下垂・肛門括約筋/会陰反射の低下・膀胱過伸展なら馬尾（仙尾部外傷）。膀胱の排尿管理を最優先、仙尾部X線。④最急性で発症時の一声以後は無痛性、左右非対称で深部痛覚が保たれるなら脊髄梗塞（FCE）。MRIで確認し支持療法・リハビリ。※神経学的検査表で客観データを取り、自分で局在（L4-S3など）を解釈することが鍵。",
 };
@@ -1616,6 +1713,9 @@ const FAMILY_CHECK={
   feline_lut:{title:"頻尿を〈閉塞/非閉塞→感染/結石/特発性〉に分ける所見を取れたか",items:[
     ["膀胱の触知","ex_bladder"],["排尿状況の聴取","hx_urine"],["電解質/K","l_lyte"],
     ["尿検査","l_ua"],["尿沈渣","l_sediment"],["尿培養","l_uculture"],["腹部画像（結石）","l_abd"]]},
+  canine_dyspnea:{title:"呼吸困難を〈心原性／非心原性〉に分ける所見を取れたか",items:[
+    ["酸素化・最小ハンドリング","o2"],["心雑音・肺音の聴診","ex_thorax"],["体温（発熱）","ex_temp"],
+    ["肺エコー/TFAST（B-line）","l_fast"],["胸部X線の分布パターン","l_thorax"],["心エコー","l_echo"],["NT-proBNP","l_bnp"]]},
 };
 function familyCheck(){
   const fc=FAMILY_CHECK[S.familyId]; if(!fc)return null;
@@ -1708,8 +1808,65 @@ function scoreNeuro(){
   }
   return {pts,lines,correctLoc,done:true};
 }
+/* ===== 心エコー解釈エンジン（客観値→病態/病期をプレイヤーが選ぶ。神経モーダルと同型）=====
+   症例の C.cardiac.echoDx = {pheno, reasons[]} が正解。echoGenの客観値を見て解釈する。 */
+const ECHO_REASONS=[
+  {id:"e_la_enl",label:"左房拡大（LA/Ao 高値）"},
+  {id:"e_la_normal",label:"左房は拡大していない（LA/Ao 正常）"},
+  {id:"e_fs_low",label:"左室収縮性の低下（FS 低値）"},
+  {id:"e_fs_ok",label:"左室収縮性は保たれる"},
+  {id:"e_dilated",label:"左室/全心腔の拡大（LVIDDN 高値）"},
+  {id:"e_lvh",label:"左室壁の肥厚"},
+  {id:"e_peri_tamp",label:"心膜液＋右房/右室の拡張期虚脱（タンポナーデ）"},
+  {id:"e_sec",label:"左房内SEC（もやもやエコー）＝血栓リスク"},
+  {id:"e_ph",label:"右心系の圧負荷サイン（肺高血圧を示唆）"},
+  {id:"e_bnp_high",label:"NT-proBNP 高値"},
+  {id:"e_bnp_low",label:"NT-proBNP 低〜正常"},
+  {id:"e_blines",label:"肺エコーでB-line瀰漫（>1部位強陽性）"},
+  {id:"e_perihilar",label:"肺門周囲優位の肺胞パターン"},
+  {id:"e_noncardiac",label:"心は正常〜軽度で肺/気道由来を示唆"},
+];
+const ECHO_OPTIONS=["非心原性（心は正常〜軽度）","心原性うっ血／左房拡大（CHF）","MMVD B2（前臨床・心拡大）","DCM（拡張型・収縮不全）","心嚢液＋タンポナーデ（閉塞性）","心筋症＋血栓リスク（SEC）","肺高血圧（PH）主体"];
+function openEchoExam(){
+  const card=S.C.cardiac; if(!card||!card.echoDx)return;
+  const opts=ECHO_OPTIONS.map(l=>`<button class="btn ghost eloc" data-eo="${l}" onclick="pickEchoLoc(this)" style="display:inline-block;width:auto;margin:3px 4px 0 0;padding:6px 10px">${l}</button>`).join('');
+  const reasons=ECHO_REASONS.map(r=>`<label style="display:block;margin:4px 0"><input type="checkbox" id="er_${r.id}" style="margin-right:6px">${r.label}</label>`).join('');
+  const cur=S.echoAnswer&&S.echoAnswer.pheno;
+  openSheet(`<h3 style="margin:2px 0 8px">🫀 心エコー（客観データ）</h3>
+    <div class="tiny" style="margin-bottom:6px">客観値から病態/病期を解釈する。単一値で断定しない（前処置のフロセミドでLA過小評価・低前負荷で偽性肥厚/過動的FS・犬種差に注意）。</div>
+    <div class="log">${echoGen(card, card.echoMode||"focused")}</div>
+    <div class="sub" style="margin-top:10px">① 客観値から最も考えられる病態/病期を選択</div>
+    <div id="elocwrap">${opts}</div>
+    <div class="sub" style="margin-top:8px">② その根拠を選択（複数可）</div>
+    <div class="log">${reasons}</div>
+    <button class="btn primary" style="margin-top:8px" onclick="submitEcho()">解釈を確定する</button>
+    <div class="tiny" id="echomsg" style="margin-top:6px">${cur?("現在の選択："+cur):""}</div>`);
+  if(cur){ const b=document.querySelector('.eloc[data-eo="'+cur+'"]'); if(b)b.style.background='#2c5a78'; }
+  if(S.echoAnswer){ (S.echoAnswer.reasons||[]).forEach(id=>{ const c=document.getElementById('er_'+id); if(c)c.checked=true; }); }
+}
+function pickEchoLoc(btn){ S._echoLoc=btn.getAttribute('data-eo'); document.querySelectorAll('.eloc').forEach(b=>b.style.background=''); btn.style.background='#2c5a78'; const m=document.getElementById('echomsg'); if(m)m.textContent="現在の選択："+S._echoLoc; }
+function submitEcho(){
+  const pheno=S._echoLoc||(S.echoAnswer&&S.echoAnswer.pheno)||null;
+  const reasons=ECHO_REASONS.filter(r=>{const c=document.getElementById('er_'+r.id);return c&&c.checked;}).map(r=>r.id);
+  S.echoAnswer={pheno,reasons}; closeSheet();
+  log("心エコーの解釈を記録："+(pheno||"未選択")+"（根拠 "+reasons.length+"項目）。"); render();
+}
+function scoreEcho(){
+  const card=S.C.cardiac; if(!card||!card.echoDx)return null;
+  if(!S.flags.has("l_echo"))return null; // 心エコーを実施したときのみ解釈を採点（未実施は別途diagnosis等で評価）
+  const dx=card.echoDx, ans=S.echoAnswer, correct=new Set(dx.reasons||[]);
+  let pts=0; const lines=[];
+  if(!ans||!ans.pheno){ lines.push(["bad","心エコーの解釈（病態/病期）を行わなかった。客観値の解釈は重要な訓練。"]); return {pts:-6,lines,correct:dx.pheno,done:false}; }
+  if(ans.pheno===dx.pheno){ pts+=16; lines.push(["ok",`病態/病期の解釈：${ans.pheno}（適切）`]); }
+  else { pts-=6; lines.push(["bad",`病態/病期の解釈：${ans.pheno}（客観値に整合するのは ${dx.pheno}）`]); }
+  const sel=new Set(ans.reasons||[]); let rc=0,rw=0;
+  for(const r of sel){ if(correct.has(r)){rc++;pts+=2;} else {rw++;pts-=2;} }
+  const missed=[...correct].filter(r=>!sel.has(r));
+  lines.push([rw?"warn":"ok",`根拠の選択：適切 ${rc} ／ 不適切 ${rw} ／ 取りこぼし ${missed.length}`]);
+  return {pts,lines,correct:dx.pheno,done:true};
+}
 // 緊急度プロファイル（最終評価の「緊急度の判断」に使用。UIには出さない）
-const CASE_TEMPO={cat_uo:"urgent",dog_gdv:"immediate",cat_resp:"immediate",dog_addison:"same_day",dog_addison_crisis:"immediate",dog_gastroenteritis:"subacute",dog_gi_fb:"urgent",dog_pancreatitis:"urgent",dog_aai:"urgent",dog_civdd:"urgent",dog_cfx:"immediate",dog_meningitis:"urgent",feline_ate:"immediate",cat_cauda:"urgent",cat_fce:"urgent",cat_pelvic_fx:"immediate",dog_anaphylaxis:"immediate",dog_hemoabdomen:"immediate",cat_asthma:"immediate",cat_pneumothorax:"immediate",cat_anemia:"urgent",cat_fic:"urgent",cat_urolith:"urgent",cat_uti:"urgent"};
+const CASE_TEMPO={cat_uo:"urgent",dog_gdv:"immediate",cat_resp:"immediate",dog_addison:"same_day",dog_addison_crisis:"immediate",dog_gastroenteritis:"subacute",dog_gi_fb:"urgent",dog_pancreatitis:"urgent",dog_aai:"urgent",dog_civdd:"urgent",dog_cfx:"immediate",dog_meningitis:"urgent",feline_ate:"immediate",cat_cauda:"urgent",cat_fce:"urgent",cat_pelvic_fx:"immediate",dog_anaphylaxis:"immediate",dog_hemoabdomen:"immediate",cat_asthma:"immediate",cat_pneumothorax:"immediate",cat_anemia:"urgent",cat_fic:"urgent",cat_urolith:"urgent",cat_uti:"urgent",dog_chf:"immediate",dog_pneumonia:"urgent"};
 const CASE_VISUAL={
   cat_uo:"沈鬱。下腹部を気にして痛がる。",
   dog_gdv:"落ち着かず立ったり座ったり。流涎し、腹部が膨らんでいる。",
@@ -1735,6 +1892,8 @@ const CASE_VISUAL={
   cat_fic:"そわそわとトイレに出入りを繰り返し、いきむが少量しか出ない。",
   cat_urolith:"トイレで力み、血の混じった尿を少量する。",
   cat_uti:"頻回にトイレへ行き、濁った尿を少量する。",
+  dog_chf:(S)=>S.flags.has("d_furosem")?"利尿後、呼吸が落ち着いてきた。":(S.flags.has("o2")?"酸素下でやや楽だが、起座位で速い呼吸と時折の咳。":"起座位で速い呼吸、時折咳き込む。"),
+  dog_pneumonia:(S)=>S.flags.has("o2")?"酸素下で頻呼吸が続く。湿った咳。":"頻呼吸で元気がなく、湿った咳をする。",
 };
 // ⑥ 緊急度（トリアージ）定義。同じ主訴でも症例ごとに必要なテンポは違う、を学ばせる。
 const TEMPO_DEF={
@@ -1809,7 +1968,7 @@ function startCase(cid,fam){
      flags:new Set(),cflags:new Set(),revealed:new Set(),
      sel:new Set(),scored:new Set(),dx:new Set(),dispo:null,snap:{},results:[],
      labTimeline:[],labPrev:{},labInterps:{},
-     dz:new Set(C.dz||[]),adverseEvents:[],cpaCtx:null,neuroAnswer:null,_neuroLoc:null,
+     dz:new Set(C.dz||[]),adverseEvents:[],cpaCtx:null,neuroAnswer:null,_neuroLoc:null,echoAnswer:null,_echoLoc:null,
      caT:0,stress:0,arrest:false,dead:false,rosc:false,cpr:null,score:0,log:[]};
   arrestShown=false; reopen=null;
   S.familyId = fam?fam.id:null;
@@ -1868,11 +2027,12 @@ function preApply(id){ // 初期装着（時間を消費せず実施済みにす
 function doAction(id){
   if(S.dead)return;
   if(id==="ex_neuro"&&S.C.neuro&&S.scored.has("ex_neuro")){ openNeuroExam(); return; } // 再クリックで解釈モーダルを開き直す
+  if(id==="l_echo"&&S.C.cardiac&&S.C.cardiac.echoDx&&S.scored.has("l_echo")){ openEchoExam(); return; } // 心エコー再クリックで解釈モーダル
   const C=S.C, isLab=actionType(id)==="lab", first=!S.scored.has(id);
   if(!first&&!isLab){ return; }
   const r0=resolveResult(id);
   const r = LAB_DEF[id] ? Object.assign({},r0,labText(id)||{})
-    : (id==="l_echo"&&S.C.cardiac) ? Object.assign({},r0,{text:"心エコー（focused）："+echoGen(S.C.cardiac,"focused"), abn:(S.C.cardiac.echoAbn!=null?!!S.C.cardiac.echoAbn:r0.abn)})
+    : (id==="l_echo"&&S.C.cardiac) ? (function(){ const md=S.C.cardiac.echoMode||"focused"; return Object.assign({},r0,{text:"心エコー（"+(md==="complete"?"完全/病期":"focused")+"）："+echoGen(S.C.cardiac,md), abn:(S.C.cardiac.echoAbn!=null?!!S.C.cardiac.echoAbn:r0.abn)}); })()
     : r0; // 検査は現在のhidden値から生成（心エコーは cardiac truth から客観値生成）
   S.sel.add(id); S.flags.add(id);
   if(r.reveal)r.reveal.forEach(k=>S.revealed.add(k));
@@ -1900,6 +2060,7 @@ function doAction(id){
   advanceTime(actionType(id)==='hx'?0:(r.time||60)); // 問診は時間を消費しない（現場の会話は短時間）。それ以外は所要時間ぶん進める
   if(S.cpr)return;         // CPRモードへ遷移したら通常UIは更新しない
   if(id==="ex_neuro"&&S.C.neuro&&first){ render(); openNeuroExam(); return; } // 神経検査：客観データ＋局在解釈モーダル
+  if(id==="l_echo"&&S.C.cardiac&&S.C.cardiac.echoDx&&first){ render(); openEchoExam(); return; } // 心エコー：客観データ＋病態解釈モーダル
   render(); if(reopen)reopen();
 }
 
@@ -2201,6 +2362,7 @@ function showResult(){
   const triage=triageEval(); if(triage)score+=triage.adj;
   const pca=pcaBundle(); if(pca)score+=pca.bonus;
   const neuro=scoreNeuro(); if(neuro)score+=neuro.pts;
+  const echoR=scoreEcho(); if(echoR)score+=echoR.pts;
   const famck=familyCheck(); if(famck)score+=famck.bonus;
   const pct=clamp(Math.round(score),0,100);
   const grade=pct>=85?"S":pct>=70?"A":pct>=55?"B":pct>=40?"C":"D";
@@ -2230,6 +2392,7 @@ function showResult(){
     <div class="card"><div class="sub">✅ 適切だった行動・診断・方針</div><div class="log">${critOk}${goodHtml}${dxLine}${dispoLine}</div></div>
     ${famck?`<div class="card" style="border-color:${famck.done>=7?'#1d6b50':famck.done>=4?'#6b561d':'#6b2330'}"><div class="sub">🔎 ${famck.title}　${famck.done}/${famck.total}</div><div class="log">${famck.items.map(it=>`<div class="e"><span class="rchip ${it[1]?'ok':'bad'}">${it[1]?'○':'×'}</span>${it[0]}</div>`).join('')}<div class="e tiny">同じ「後ろ足が動かない」でも、これらの身体検査を取りに行けば早期に血管性／神経性／整形外科性を分けられる。</div></div></div>`:''}
     ${neuro?`<div class="card" style="border-color:#2c5a78"><div class="sub">🧠 神経局在の解釈（客観データ→局在）</div><div class="log">${neuro.lines.map(l=>`<div class="e"><span class="rchip ${l[0]}">${l[0]==='ok'?'○':l[0]==='bad'?'×':l[0]==='warn'?'△':'·'}</span>${l[1]}</div>`).join('')}<div class="e tiny">客観的な検査データから自分で病変部位を絞り込む訓練。所見の解釈こそが診断推論の核心。</div></div></div>`:''}
+    ${echoR?`<div class="card" style="border-color:#2c5a78"><div class="sub">🫀 心エコーの解釈（客観値→病態/病期）</div><div class="log">${echoR.lines.map(l=>`<div class="e"><span class="rchip ${l[0]}">${l[0]==='ok'?'○':l[0]==='bad'?'×':l[0]==='warn'?'△':'·'}</span>${l[1]}</div>`).join('')}<div class="e tiny">LA/Ao・LVIDDN・FS・心嚢/タンポナーデ・PHなどの客観値を統合して病態/病期を絞る。単一値で断定しない。</div></div></div>`:''}
     ${pca?`<div class="card" style="border-color:${pca.done/pca.total>=0.8?'#1d6b50':pca.done/pca.total>=0.5?'#6b561d':'#6b2330'}"><div class="sub">🫀 蘇生後（PCA）ケア・バンドル　${pca.done}/${pca.total} 項目</div><div class="log">${pca.items.map(it=>`<div class="e"><span class="rchip ${it[1]?'ok':'bad'}">${it[1]?'○':'×'}</span>${it[0]}<div class="tiny">${it[2]}</div></div>`).join('')}<div class="e tiny">※ROSCはゴールではなく出発点。これらを継続監視し、可逆的原因の治療と再CPA予防を続ける。</div></div></div>`:''}
     ${harmHtml?`<div class="card"><div class="sub">⛔ 禁忌・不適切だった行動</div><div class="log">${harmHtml}</div></div>`:''}
     ${advHtml?`<div class="card"><div class="sub">💊 薬剤副作用・医原性（減点）</div><div class="log">${advHtml}</div></div>`:''}

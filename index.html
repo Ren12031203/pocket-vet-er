@@ -2135,6 +2135,16 @@ function paintVitals(live){
   set('nSpO2',S.arrest?"–":show("SpO2")?Math.round(S.disp.SpO2):"–");
   set('nRR',S.arrest?"0":showV("RR")?Math.round(jit(S.disp.RR,0.35,3)):"–");
 }
+// 現在のバイタル（真値S.h＝目に見える状態）から「見た目の重症度」を連続生成。閾値を跨ぐたびに表現が変わり“刻一刻”の視診に。
+function vitalDistress(S){
+  const h=S.h||{}; const p=[];
+  if(h.SpO2!=null){ if(h.SpO2<78)p.push("チアノーゼで激しくあえぐ"); else if(h.SpO2<88)p.push("口を開け苦しそうに呼吸する"); else if(h.SpO2<93)p.push("呼吸がやや速く浅い"); }
+  else if(h.RR!=null && h.RR>50)p.push("呼吸が速く浅い");
+  if(h.SBP!=null){ if(h.SBP<60)p.push("虚脱し反応に乏しい"); else if(h.SBP<78)p.push("ぐったりして元気がない"); else if(h.SBP<92)p.push("やや元気がなくうつむく"); }
+  if(h.HR!=null){ if(h.HR<48)p.push("ぐったりと動かない（徐脈）"); else if(h.HR>205)p.push("落ち着かずそわそわする"); }
+  if(h.temp!=null){ if(h.temp>=40.2)p.push("熱っぽくぐったりする"); else if(h.temp<36.8)p.push("体が冷たく小刻みに震える"); }
+  return p.slice(0,2).join("・");
+}
 function render(){
   document.getElementById('clock').textContent=fmt(S.t);
   const showV=k=>(S.revealed.has(k)&&!isNaN(S.disp[k]));            // 手でも分かる（HR/RR：TPRでも可）
@@ -2159,7 +2169,9 @@ function render(){
   document.getElementById('statusbar').innerHTML=sb.join("");
   // 視診（見た目）：機器・触診なしで分かる情報をリアルタイム表示
   const vraw=CASE_VISUAL[S.cid]; const vis = typeof vraw==="function"?vraw(S):(vraw||"");
-  document.getElementById('visualbar').innerHTML = vis?("👁 見た目："+vis):"";
+  const vd = (!S.arrest)?vitalDistress(S):""; // バイタル連動の見た目（連続変化）
+  const visAll = [vis, vd].filter(Boolean).join("　／　");
+  document.getElementById('visualbar').innerHTML = visAll?("👁 見た目："+visAll):"";
   const al=document.getElementById('alarm');
   if(!S.arrest&&!S.rosc){
     if(show("SpO2")&&S.disp.SpO2<90)al.innerHTML='<span style="color:var(--amber)">⚠ 低酸素</span>';
@@ -2284,7 +2296,7 @@ function loopMon(){
   if(S && !S.dead){
     for(const k of ["HR","SBP","SpO2","RR"]){ if(S.revealed.has(k)){
       if(isNaN(S.disp[k]))S.disp[k]=S.h[k];
-      else S.disp[k]+=(S.h[k]-S.disp[k])*0.045; } } // ≈1.5秒で到達＝滑らかな ramp
+      else S.disp[k]+=(S.h[k]-S.disp[k])*0.038; } } // ≈1.8秒で到達＝行為後の変化が“climb”として見える
     const now=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
     if((!wf._lastPaint || now-wf._lastPaint>110) && typeof paintVitals==='function' && document.getElementById('nHR')){ wf._lastPaint=now; paintVitals(true); }
   }

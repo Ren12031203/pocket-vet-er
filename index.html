@@ -1744,7 +1744,7 @@ const CASES = {
       o2:{text:"酸素を投与。",s:0,time:30},
     },
     truthImg:{region:"both", text:"明らかな異常を認めない（健康）。"},
-    finalNote:"これは診断症例ではなく、薬力学の練習。健康な動物に『適応のない薬』を入れると全身状態・検査値に異常が出る——例：フロセミドで低K・低Cl性アルカローシス＋腎前性高窒素血症（脱水）、KClで高K（致死性不整脈）、ステロイド/ブドウ糖で高血糖、アドレナリンで頻脈・高血圧・高血糖・低K、アセプロマジンで低血圧・低体温、オピオイド/プロポフォールで呼吸抑制・低酸素、デクスメデトミジンで徐脈、ヘパリンでaPTT延長、テルブタリンで頻脈・低K。投与→モニターと再検査で『何が起きたか』を客観的に読む。拮抗薬（ナロキソン／アチパメゾール）は対応する作動薬を入れた後にだけ効く。薬は適応と禁忌を確認してから——『とりあえず投与』は害になりうる。出典：Plumb's Veterinary Drug Handbook 10th。",
+    finalNote:"これは診断を当てる症例ではなく、薬を入れて全身状態・検査値がどう動くかを見る練習。健康な動物に『適応のない薬』を入れると全身状態・検査値に異常が出る——例：フロセミドで低K・低Cl性アルカローシス＋腎前性高窒素血症（脱水）、KClで高K（致死性不整脈）、ステロイド/ブドウ糖で高血糖、アドレナリンで頻脈・高血圧・高血糖・低K、アセプロマジンで低血圧・低体温、オピオイド/プロポフォールで呼吸抑制・低酸素、デクスメデトミジンで徐脈、ヘパリンでaPTT延長、テルブタリンで頻脈・低K。投与→モニターと再検査で『何が起きたか』を客観的に読む。拮抗薬（ナロキソン／アチパメゾール）は対応する作動薬を入れた後にだけ効く。薬は適応と禁忌を確認してから——『とりあえず投与』は害になりうる。出典：Plumb's Veterinary Drug Handbook 10th。",
   },
   sandbox_cat:{
     id:"sandbox_cat", icon:"🧪", title:"健康な猫：薬剤の影響シミュレーション", level:"★☆☆", patient:"cat", sandbox:true,
@@ -1768,7 +1768,7 @@ const CASES = {
       o2:{text:"酸素を投与。",s:0,time:30},
     },
     truthImg:{region:"both", text:"明らかな異常を認めない（健康）。"},
-    finalNote:"診断症例ではなく薬力学の練習（猫版）。健康猫に適応のない薬を入れると検査値・全身状態に異常が出る。猫は犬と異なる注意点がある——HR基準が高く（正常120–240）、リドカインなどに中毒感受性が高い、ステロイドや浸透圧負荷への耐性も異なる。例：KClで高K、フロセミドで低K・脱水、ステロイド/ブドウ糖で高血糖、アドレナリンで頻脈・高血圧、アセプロマジンで低血圧、オピオイド/プロポフォールで呼吸抑制、デクスメデトミジンで徐脈。投与→モニターと再検査で客観的に読むこと。出典：Plumb's Veterinary Drug Handbook 10th。",
+    finalNote:"診断を当てる症例ではなく、薬を入れて反応を見る練習（猫版）。健康猫に適応のない薬を入れると検査値・全身状態に異常が出る。猫は犬と異なる注意点がある——HR基準が高く（正常120–240）、リドカインなどに中毒感受性が高い、ステロイドや浸透圧負荷への耐性も異なる。例：KClで高K、フロセミドで低K・脱水、ステロイド/ブドウ糖で高血糖、アドレナリンで頻脈・高血圧、アセプロマジンで低血圧、オピオイド/プロポフォールで呼吸抑制、デクスメデトミジンで徐脈。投与→モニターと再検査で客観的に読むこと。出典：Plumb's Veterinary Drug Handbook 10th。",
   },
 };
 
@@ -2541,7 +2541,7 @@ function showResult(){
   const mCol=(ok,warn)=>ok?"var(--green)":warn?"var(--amber)":"var(--red)";
   const metricsHtml=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:6px 0 10px">
     ${metricCard("必須対応", critTotal?critDone+"/"+critTotal:"—", mCol(critTotal&&critDone===critTotal, critDone>=critTotal*0.5))}
-    ${metricCard("診断", dxPrimary?"正解":dxHit?"関連":"×", mCol(dxPrimary, dxHit))}
+    ${metricCard("診断", (C.sandbox||!C.primaryDx)?"—":(dxPrimary?"正解":dxHit?"関連":"×"), (C.sandbox||!C.primaryDx)?"#8fb3a3":mCol(dxPrimary, dxHit))}
     ${metricCard("方針", dispoOK?"適切":(S.dispo?"不適":"未"), mCol(dispoOK, false))}
     ${metricCard("安全性", safetyN?("禁忌"+safetyN):"良好", mCol(!safetyN, false))}
   </div>`;
@@ -2552,7 +2552,9 @@ function showResult(){
   let harmHtml=harm.map(h=>`<div class="e"><span class="rchip bad">禁忌/不適切</span>${labelOf(h.id)} ${snapStr(h.id)}<div class="tiny">${h.v}</div></div>`).join('');
   let unnecHtml=unnec.map(id=>`<div class="e"><span class="rchip neu">−</span>${labelOf(id)}（診断価値が低い） ${snapStr(id)}</div>`).join('')
     +dxWrong.map(d=>`<div class="e"><span class="rchip neu">−</span>余分な鑑別：${dxLabel(d)}</div>`).join('');
-  const dxLine=`<div class="e"><span class="rchip ${dxPrimary||dxHit?'ok':'bad'}">${dxPrimary||dxHit?'○':'×'} 診断</span>${dxPrimary?'正解：'+dxLabel(C.primaryDx):dxHit?'関連診断は選べた':'主たる正解は「'+dxLabel(C.primaryDx)+'」'}${dr.comorbid?`<div class="tiny">併存病態の認識：${comorbidHit}/${dr.comorbid.length}${onlyWrong?'　／ 非閉塞性のみと判断するのは危険':''}</div>`:''}</div>`;
+  const dxLine = (C.sandbox||!C.primaryDx)
+    ? ``
+    : `<div class="e"><span class="rchip ${dxPrimary||dxHit?'ok':'bad'}">${dxPrimary||dxHit?'○':'×'} 診断</span>${dxPrimary?'正解：'+dxLabel(C.primaryDx):dxHit?'関連診断は選べた':'主たる正解は「'+dxLabel(C.primaryDx)+'」'}${dr.comorbid?`<div class="tiny">併存病態の認識：${comorbidHit}/${dr.comorbid.length}${onlyWrong?'　／ 非閉塞性のみと判断するのは危険':''}</div>`:''}</div>`;
   const dispoLine=`<div class="e"><span class="rchip ${dispoOK?'ok':'bad'}">${dispoOK?'○':'×'} 方針</span>${dispoOK?DISPOSITIONS.find(d=>d[0]===S.dispo)[1]:'適切な転帰ではない'}</div>`;
   let advHtml=S.adverseEvents.length?S.adverseEvents.map(a=>`<div class="e"><span class="rchip bad">${a.score}</span>${labelOf(a.id)}：${a.msg}</div>`).join(''):'';
 

@@ -1980,8 +1980,7 @@ function startCase(cid,fam){
 function tick(){
   if(S.dead||S.paused)return; S.t+=STEP; if(S.caT>0)S.caT-=STEP; // 問診中(S.paused)は時計を止める
   S.C.physiology(S);
-  if(S.flags.has("monitor")){ for(const k of ["HR","SBP","SpO2","RR"]){ if(!S.revealed.has(k))continue;
-    if(isNaN(S.disp[k]))S.disp[k]=S.h[k]; S.disp[k]+=(S.h[k]-S.disp[k])*0.5; } }
+  // 表示値S.dispの追従はモニターループ(loopMon)が毎フレーム滑らかに行う（ここでスナップしない＝刻一刻の変化）
   evaluateCPA();
   if(S.arrest&&!S.rosc&&!S.dead&&!S.cpr)enterCPR();
   render();
@@ -1996,7 +1995,7 @@ function advanceTime(seconds){
     if(S.arrest&&!S.rosc&&!S.cpr){ enterCPR(); return; }
     rem-=dt;
   }
-  if(S.flags.has("monitor")){ for(const k of ["HR","SBP","SpO2","RR"]) if(S.revealed.has(k)) S.disp[k]=S.h[k]; }
+  // ※ここで S.disp に S.h を即時スナップしない。行為で進んだ病態へモニター表示が数秒かけて追従し、変化が“刻一刻”見える。
 }
 // CPA発生時は必ず enterCPR() に統一（旧 onArrest()/tryResus() は廃止）
 
@@ -2123,15 +2122,24 @@ function drawRoom(){
 }
 
 // ---------- 描画 ----------
+// バイタル数値の描画（render と モニターループの両方から呼ぶ）。live=true で生体の微変動を付与。
+function paintVitals(live){
+  if(!S)return;
+  const showV=k=>(S.revealed.has(k)&&!isNaN(S.disp[k]));
+  const show=k=>(S.flags.has("monitor")&&S.revealed.has(k)&&!isNaN(S.disp[k]));
+  const tt=((typeof performance!=='undefined'&&performance.now)?performance.now():Date.now())/1000;
+  const jit=(v,a,ph)=>(live&&!S.arrest)? v+Math.sin(tt*1.1+(ph||0))*a : v; // 表示のみの緩やかな揺らぎ（真の値S.hは汚さない・ちらつかない）
+  set('nHR',S.arrest?"0":showV("HR")?Math.round(jit(S.disp.HR,0.7,0)):"–");
+  if(S.arrest)set('nBP',"–"); else if(show("SBP")){const sb=Math.round(jit(S.disp.SBP,0.7,1.6)),db=Math.round(sb*0.62),mp=Math.round(db+(sb-db)/3);
+    document.getElementById('nBP').innerHTML=sb+"/"+db+' <span style="font-size:.62em;opacity:.85">('+mp+')</span>';} else set('nBP',"–");
+  set('nSpO2',S.arrest?"–":show("SpO2")?Math.round(S.disp.SpO2):"–");
+  set('nRR',S.arrest?"0":showV("RR")?Math.round(jit(S.disp.RR,0.35,3)):"–");
+}
 function render(){
   document.getElementById('clock').textContent=fmt(S.t);
   const showV=k=>(S.revealed.has(k)&&!isNaN(S.disp[k]));            // 手でも分かる（HR/RR：TPRでも可）
   const show=k=>(S.flags.has("monitor")&&S.revealed.has(k)&&!isNaN(S.disp[k])); // 機器が要る（SBP/SpO₂）
-  set('nHR',S.arrest?"0":showV("HR")?Math.round(S.disp.HR):"–");
-  if(S.arrest)set('nBP',"–"); else if(show("SBP")){const sb=Math.round(S.disp.SBP),db=Math.round(S.disp.SBP*0.62),mp=Math.round(db+(sb-db)/3);
-    document.getElementById('nBP').innerHTML=sb+"/"+db+' <span style="font-size:.62em;opacity:.85">('+mp+')</span>';} else set('nBP',"–");
-  set('nSpO2',S.arrest?"–":show("SpO2")?Math.round(S.disp.SpO2):"–");
-  set('nRR',S.arrest?"0":showV("RR")?Math.round(S.disp.RR):"–");
+  paintVitals(false);
   // peri-arrest 警告（CPA前段階）
   const warn=[];
   if(show("SpO2")&&S.disp.SpO2<80)warn.push("重度低酸素");
@@ -2171,6 +2179,8 @@ function resultsHTML(types){ // モーダル内にその場で結果を表示（
     list.map(r=>`<div class="e"><span class="ts">${fmt(r.t)}</span><b>${labelOf(r.id)}</b>：<span style="${r.abn?'color:var(--red);font-weight:700':''}">${r.text}</span></div>`).join('')+`</div></div>`;
 }
 function catByKey(k){ return CATALOG.find(c=>c.key===k); }
+// 検査PC（lab）の上部カテゴリタブ（人医版に倣い、長いスクロールを整理）。
+const LAB_TABS=[["🩸 検査",["血液検査","尿検査"]],["📈 生理",["生理検査"]],["🩻 画像",["画像：レントゲン（X線）","画像：超音波（エコー）","画像：CT/MRI"]]];
 function openCat(key){
   reopen=()=>{ if(document.getElementById('ov').classList.contains('show'))renderCat(key); };
   renderCat(key);
@@ -2180,7 +2190,9 @@ function itemBtn(id,label){ const sel=S.sel.has(id);
 function renderCat(key){
   const c=catByKey(key);
   let h=`<h3>${c.cat}<button class="x" onclick="closeSheet()">×</button></h3>`;
-  if(c.search)h+=`<input id="catsearch" type="text" placeholder="🔎 検索" value="${window._csearch||''}" oninput="window._csearch=this.value;filterCatList('${key}')" style="margin-bottom:8px">`;
+  if(c.search)h+=`<input id="catsearch" type="text" placeholder="🔎 検索（全カテゴリ横断）" value="${window._csearch||''}" oninput="window._csearch=this.value;filterCatList('${key}')" style="margin-bottom:8px">`;
+  if(key==='lab'){ const cur=window._labTab||LAB_TABS[0][0];
+    h+=`<div class="tabs" style="display:flex;gap:6px;margin-bottom:8px">`+LAB_TABS.map(t=>`<div class="tab ${cur===t[0]?'on':''}" style="flex:1;text-align:center" onclick="window._labTab='${t[0]}';filterCatList('lab')">${t[0]}</div>`).join('')+`</div>`; }
   h+=`<div id="catlist">${catListHTML(key)}</div>`; // 入力欄は据え置き、リストだけ更新（日本語入力が途切れない）
   openSheet(h);
 }
@@ -2188,10 +2200,13 @@ function catListHTML(key){
   const c=catByKey(key); const q=(window._csearch||'').toLowerCase(); let h='';
   if(c.groups){
     let any=false;
-    for(const grp of c.groups){
+    let groups=c.groups;
+    // 検査PCはタブで絞り込み（検索時は全カテゴリ横断）
+    if(key==='lab' && !q){ const cur=window._labTab||LAB_TABS[0][0]; const allow=(LAB_TABS.find(t=>t[0]===cur)||['',[]])[1]; groups=c.groups.filter(g=>allow.includes(g.g)); }
+    for(const grp of groups){
       const items=grp.items.filter(it=>!q||it.label.toLowerCase().includes(q));
       if(!items.length)continue; any=true;
-      const gid=key+':'+grp.g, open=q?true:OG.has(gid);
+      const gid=key+':'+grp.g, open=(q||key==='lab')?true:OG.has(gid); // タブ内は既定で展開
       h+=`<details class="grp" ${open?'open':''} data-g="${gid}" ontoggle="onGroupToggle(this)"><summary><span>${grp.g}</span><span class="tiny">${items.length}</span></summary><div style="padding:6px 10px 10px">`;
       for(const it of items)h+=itemBtn(it.id,it.label);
       h+=`</div></details>`;
@@ -2265,6 +2280,14 @@ function loopMon(){
   const {c,ctx}=wf,W=c.width,H=c.height,laneH=H/3;
   ctx.fillStyle="#03100a";ctx.fillRect(0,0,W,H);
   ctx.strokeStyle="#0c2a1a";ctx.lineWidth=1; for(let x=0;x<W;x+=18){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  // 表示バイタルを真の値へ毎フレーム滑らかに追従させ、数値も“刻一刻”動かす（行為後のスナップを廃止した分をここで滑らかに）
+  if(S && !S.dead){
+    for(const k of ["HR","SBP","SpO2","RR"]){ if(S.revealed.has(k)){
+      if(isNaN(S.disp[k]))S.disp[k]=S.h[k];
+      else S.disp[k]+=(S.h[k]-S.disp[k])*0.045; } } // ≈1.5秒で到達＝滑らかな ramp
+    const now=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
+    if((!wf._lastPaint || now-wf._lastPaint>110) && typeof paintVitals==='function' && document.getElementById('nHR')){ wf._lastPaint=now; paintVitals(true); }
+  }
   const mon=S&&S.flags.has("monitor")&&S.revealed.has("HR");
   const hr=(!S||S.arrest)?0:(mon?S.disp.HR:0); const beat=hr>0?Math.max(14,(60/hr)*110):0;
   for(let s=0;s<4;s++){ wf.x=(wf.x+1)%W; let ph=wf.ph;
@@ -2332,6 +2355,8 @@ function cprToFinal(){ S.dead=true; if(S.cpr)S.cpr.status="terminated"; finalize
 
 // ---------- 評価 ----------
 function snapStr(id){ const s=S.snap[id]; if(!s)return''; return `<span class="vsnap">[${fmt(s.t)}] HR${s.HR}/SAP${s.SBP}/SpO₂${s.SpO2}/${s.temp.toFixed(1)}℃</span>`; }
+// 評価サマリーの指標カード（人医版に倣った見せ方）。
+function metricCard(label,val,col){ return `<div style="background:var(--card2,#0e1f17);border:1px solid #1c3a2b;border-radius:10px;padding:8px 6px;text-align:center"><div style="font-size:11px;color:#8fb3a3">${label}</div><div style="font-size:17px;font-weight:800;color:${col};margin-top:2px;line-height:1.1">${val}</div></div>`; }
 function showResult(){
   document.getElementById('sim').classList.add('hide'); closeSheet();
   const C=S.C; let score=S.score;
@@ -2367,10 +2392,20 @@ function showResult(){
   const pct=clamp(Math.round(score),0,100);
   const grade=pct>=85?"S":pct>=70?"A":pct>=55?"B":pct>=40?"C":"D";
   const gcol=(grade==="S"||grade==="A")?"var(--green)":grade==="B"?"var(--amber)":"var(--red)";
+  // 指標サマリー（既存の採点要素から導出）
+  const critTotal=crit.length, critDone=crit.filter(c=>c.ok).length;
+  const safetyN=harm.length+(S.adverseEvents?S.adverseEvents.length:0);
+  const mCol=(ok,warn)=>ok?"var(--green)":warn?"var(--amber)":"var(--red)";
+  const metricsHtml=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:6px 0 10px">
+    ${metricCard("必須対応", critTotal?critDone+"/"+critTotal:"—", mCol(critTotal&&critDone===critTotal, critDone>=critTotal*0.5))}
+    ${metricCard("診断", dxPrimary?"正解":dxHit?"関連":"×", mCol(dxPrimary, dxHit))}
+    ${metricCard("方針", dispoOK?"適切":(S.dispo?"不適":"未"), mCol(dispoOK, false))}
+    ${metricCard("安全性", safetyN?("禁忌"+safetyN):"良好", mCol(!safetyN, false))}
+  </div>`;
 
   let missHtml=crit.filter(c=>!c.ok).map(c=>`<div class="e"><span class="rchip bad">未実施</span>${c.label}</div>`).join('');
   let critOk=crit.filter(c=>c.ok).map(c=>`<div class="e"><span class="rchip ok">○ 適切</span>${c.label} ${snapStr(c.id)}</div>`).join('');
-  let goodHtml=good.map(id=>`<div class="e"><span class="rchip ok">＋</span>${labelOf(id)} ${snapStr(id)}</div>`).join('');
+  let goodHtml=good.map(id=>`<div class="e"><span class="rchip ok">＋</span>${labelOf(id)} ${snapStr(id)}<span class="tiny" style="opacity:.7"> ／ 診断・管理に有用</span></div>`).join('');
   let harmHtml=harm.map(h=>`<div class="e"><span class="rchip bad">禁忌/不適切</span>${labelOf(h.id)} ${snapStr(h.id)}<div class="tiny">${h.v}</div></div>`).join('');
   let unnecHtml=unnec.map(id=>`<div class="e"><span class="rchip neu">−</span>${labelOf(id)}（診断価値が低い） ${snapStr(id)}</div>`).join('')
     +dxWrong.map(d=>`<div class="e"><span class="rchip neu">−</span>余分な鑑別：${dxLabel(d)}</div>`).join('');
@@ -2383,6 +2418,7 @@ function showResult(){
     <div style="text-align:center;margin:6px 0 10px"><div class="pill">結果</div>
       <div class="scoreBig" style="color:${gcol}">${grade}</div>
       <div class="sub">スコア ${pct} 点　／　所要 ${fmt(S.t)}${S.dead?'　/　救命できず':S.rosc?'　/　一度心停止':''}</div></div>
+    ${metricsHtml}
     ${S.cpaCtx?`<div class="card" style="border-color:#6b2330"><div class="sub" style="color:var(--red)">🫀 心停止（CPA）に至った直接の原因</div><div class="log">
       <div class="e"><span class="rchip bad">直接原因</span><b>${causeLabel(S.cpaCtx.category)}</b>${S.cpaCtx.iatrogenic?'（医原性・回避可能だった可能性）':REVERSIBLE_CAUSES.includes(S.cpaCtx.category)?'（可逆的＝早期に是正すれば回避可能）':''}</div>
       <div class="e tiny">初期リズム：${rhythmName(S.cpaCtx.rhythm||'unknown')}　／　転帰：${S.dead?'蘇生に至らず':S.rosc?'ROSC後にPCA管理':'—'}</div>
@@ -2399,8 +2435,8 @@ function showResult(){
     ${unnecHtml?`<div class="card"><div class="sub">▽ 影響の小さかった/不要な行動</div><div class="log">${unnecHtml}</div></div>`:''}
     ${Object.keys(S.labInterps||{}).length?`<div class="card"><div class="sub">📖 検査の読み方（解説）</div><div class="log">${Object.values(S.labInterps).map(t=>`<div class="e">${t}</div>`).join('')}</div></div>`:''}
     ${S.familyId&&FAMILY_DXFLOW[S.familyId]?`<div class="card" style="border-color:#2c5a78"><div class="sub">🧭 主訴からの鑑別の進め方（フローチャート）</div><p style="margin:6px 0">${FAMILY_DXFLOW[S.familyId]}</p></div>`:''}
-    <div class="card"><div class="sub">📖 解説</div><p style="margin:6px 0">${C.finalNote}</p>
-      <p class="tiny">※用量・手技・実診療判断は最新のガイドライン／添付文書／施設プロトコルで確認してください。</p></div>
+    ${(()=>{ const fn=C.finalNote||''; const i=fn.search(/出典[:：]/); const body=i>=0?fn.slice(0,i).trim():fn; const src=i>=0?fn.slice(i).trim():'';
+      return `<div class="card" style="border-color:#2c5a78"><div class="sub">📖 モデル解答の流れ（模範）</div><p style="margin:6px 0">${body}</p>${src?`<p class="tiny" style="opacity:.8">📄 ${src}</p>`:''}<p class="tiny">※用量・手技・実診療判断は最新のガイドライン／添付文書／施設プロトコルで確認してください。</p></div>`; })()}
     <button class="btn primary" onclick="${S.familyId?`startFamily('${S.familyId}')`:`startCase('${S.cid}')`}">▶ もう一度${S.familyId?'（別の症例になる）':''}</button>
     <button class="btn ghost" style="margin-top:8px" onclick="toStart()">トップへ</button>`;
   window.scrollTo(0,0);
